@@ -1,0 +1,62 @@
+# =============================================================================
+# AyushBot — Python Project Configuration (pyproject.toml)
+# =============================================================================
+#
+# PURPOSE:
+#   Centralized Python project configuration file following PEP 621.
+#   Defines project metadata, dependencies, tool configurations (pytest,
+#   black, ruff, mypy), and build system specifications.
+#
+# SECTIONS:
+#
+#   [project]
+#     name: "ayushbot"
+#     version: "0.1.0"
+#     description: "Offline-first, privacy-preserving, multi-agent healthcare
+#       AI co-pilot for ASHA workers in rural India"
+#     requires-python: ">=3.10"
+#     license: MIT (or appropriate open-source license)
+#     authors: [AyushBot team]
+#     dependencies: (see backend/requirements.txt for the full list)
+#       Core: fastapi, uvicorn, pydantic, pyyaml
+#       ML: xgboost, scikit-learn, onnxruntime
+#       LLM: llama-cpp-python (for Phi-3 Mini GGUF inference)
+#       RAG: faiss-cpu, sentence-transformers
+#       FL: flwr (Flower framework)
+#       NLP: transformers, ai4bharat-transliteration
+#       Database: sqlalchemy, aiosqlite
+#       MQTT: paho-mqtt
+#
+#   [project.optional-dependencies]
+#     dev: pytest, pytest-asyncio, black, ruff, mypy, pre-commit
+#     ml-training: optuna, shap, matplotlib, seaborn, pandas, pyarrow
+#     cloud: streamlit (for analytics dashboard)
+#
+#   [tool.pytest.ini_options]
+#     testpaths: ["tests"]
+#     markers:
+#       slow: "Tests that take > 5 seconds (LLM inference, FL rounds)"
+#       integration: "Tests requiring multiple components or Docker"
+#       hardware: "Tests requiring physical hardware (skip in CI)"
+#       simulation: "Full ASHA scenario simulations (requires real models)"
+#     asyncio_mode: "auto"
+#
+#   [tool.black]
+#     line-length: 88
+#     target-version: ["py310"]
+#
+#   [tool.ruff]
+#     line-length: 88
+#     select: ["E", "F", "W", "I", "N", "UP", "B", "SIM"]
+#     ignore: ["E501"] (long lines — handled by black)
+#
+#   [tool.mypy]
+#     python_version: "3.10"
+#     warn_return_any: true
+#     warn_unused_configs: true
+#     ignore_missing_imports: true
+#
+#   [build-system]
+#     requires: ["setuptools>=68.0", "wheel"]
+#     build-backend: "setuptools.build_meta"
+# =============================================================================

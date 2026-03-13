@@ -1,0 +1,84 @@
+# =============================================================================
+# AyushBot — Git Ignore Rules
+# =============================================================================
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+*.whl
+
+# ---- Virtual Environments ----
+.venv/
+venv/
+env/
+
+# ---- IDE ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---- Raw Data (large, license-restricted) ----
+data/raw/
+data/processed/
+data/corpus/cleaned_text/
+data/corpus/chunks/
+data/corpus/raw_pdfs/*.pdf
+data/synthetic/*.parquet
+data/synthetic/*.csv
+
+# ---- Model Artifacts (large binary files) ----
+ml/triage_classifier/model/
+ml/language/models/
+ml/signal_quality/models/
+ml/fl_simulation/node_data/
+ml/fl_simulation/results/
+*.onnx
+*.gguf
+*.bin
+*.pt
+*.pth
+*.pkl
+*.joblib
+*.tflite
+
+# ---- RAG Index (large, reproducible) ----
+backend/rag/index/*.faiss
+backend/rag/index/*.pkl
+
+# ---- TLS Certificates (secret) ----
+infra/certs/*.key
+infra/certs/*.crt
+infra/certs/*.pem
+backend/security/certs/
+
+# ---- Docker ----
+*.log
+docker-compose.override.yml
+
+# ---- Firmware Build ----
+firmware/sensor_pack/.pio/
+firmware/edge_impulse/export/*.tflite
+firmware/edge_impulse/export/*.h
+
+# ---- Jupyter ----
+.ipynb_checkpoints/
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Research Paper Build ----
+research/*.pdf
+research/*.log
+research/*.out
+research/*.bbl
+research/*.blg
+research/*.synctex.gz
