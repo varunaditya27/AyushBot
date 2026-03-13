@@ -1,0 +1,38 @@
+# =============================================================================
+# AyushBot Cloud — Python Dependencies (requirements.txt)
+# =============================================================================
+#
+# PURPOSE:
+#   Lists all Python package dependencies for the cloud services.
+#   Install with: pip install -r requirements.txt
+#
+# --- FL Server ---
+# flwr                     # Flower FL framework (server + common)
+# numpy                    # Gradient array operations
+# scipy                    # Statistical tests for Byzantine detection
+#
+# --- Cloud API ---
+# fastapi                  # Async web framework
+# uvicorn[standard]        # ASGI server
+# pydantic>=2.0            # Data validation
+# sqlalchemy>=2.0          # ORM for PostgreSQL
+# psycopg2-binary          # PostgreSQL driver
+# alembic                  # Database migrations
+#
+# --- Analytics ---
+# streamlit                # Dashboard framework
+# plotly                   # Interactive charts
+# pandas                   # Data manipulation for aggregations
+# geopandas                # Geographic data for India map visualization
+#
+# --- Security ---
+# cryptography             # Certificate management
+# python-jose              # JWT token handling (for admin auth)
+#
+# --- Utilities ---
+# pyyaml                   # Config loading
+# structlog                # Structured logging
+# prometheus-client        # Metrics export
+# httpx                    # HTTP client
+# boto3                    # AWS S3 (for model file storage, if using AWS)
+# =============================================================================

@@ -1,0 +1,3 @@
+This directory stores saved chart configuration files and static assets
+for the analytics dashboard (e.g., custom Plotly chart templates, exported
+SVG visualizations, dashboard layout JSON files).
