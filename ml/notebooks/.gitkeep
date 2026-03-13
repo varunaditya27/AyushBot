@@ -1,0 +1,23 @@
+Placeholder for Jupyter notebooks used during exploratory data analysis.
+
+Expected notebooks (create as needed during development):
+
+  eda_mimiciv.ipynb
+    Exploratory analysis of MIMIC-IV triage data: distributions of vital
+    signs, ED dispositions, age demographics, missing value patterns.
+    Used to inform feature engineering decisions.
+
+  eda_nfhs5.ipynb
+    Exploratory analysis of NFHS-5 Indian household health data:
+    child anthropometry distributions, anemia prevalence by state,
+    regional health patterns. Used for Indian data augmentation strategy.
+
+  fl_convergence_plots.ipynb
+    Visualization of FL simulation results: convergence curves for
+    FedAvg vs FedProx vs SCAFFOLD, Byzantine robustness heatmaps,
+    gossip protocol effectiveness. Generates figures for the research paper.
+
+  rag_eval.ipynb
+    Manual evaluation of RAG retrieval quality: sample queries,
+    retrieved chunks, reranker scores, LLM synthesis quality.
+    Used for iterative RAG pipeline tuning.
