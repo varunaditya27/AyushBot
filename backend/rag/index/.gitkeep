@@ -1,0 +1,11 @@
+This directory stores the serialized FAISS index and chunk metadata files
+produced by the offline build_index.py script. These files are loaded by the
+retriever at gateway startup.
+
+Expected files after a successful index build:
+  - faiss_index.bin       — Serialized FAISS HNSW index (~10-50 MB)
+  - chunk_metadata.json   — Mapping from vector ID to chunk object (~5-20 MB)
+  - index_manifest.json   — Build metadata (timestamp, params, chunk count)
+
+These files are NOT committed to git (too large). They are built on the
+development machine and deployed to the gateway via rsync or manual copy.
