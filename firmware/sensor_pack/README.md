@@ -1,52 +1,55 @@
-# AyushBot Sensor Pack Firmware
+<div align="center">
 
-## Purpose
+# 📟 Sensor Pack Main Firmware
 
-This directory contains the complete firmware for the AyushBot Arduino-based
-physiological sensor pack — the hardware fail-safe layer (Layer 1) of the
-AyushBot system.
+**ESP32 BLE Peripheral Configuration**
 
-The sensor pack is responsible for:
+</div>
 
-1. **Reading vital signs** from three sensors (SpO2/HR, Temperature, Weight)
-2. **Fusing sensor data** via a Kalman filter for noise reduction
-3. **Running a TinyML danger classifier** directly on the microcontroller
-   (binary: DANGER / NOT DANGER) with sub-millisecond latency
-4. **Transmitting readings** to the ASHA's Android phone over BLE GATT,
-   encrypted with ASCON-128 lightweight cryptography
-5. **Firing a hardware alarm** if critical danger signs are detected,
-   independent of phone or gateway connectivity
+## 📌 Overview
 
-## Target Hardware
+The `/firmware/sensor_pack` directory contains the primary PlatformIO project for the physical AyushBot wearable. It bridges the raw I2C hardware sensors, runs them through the DSP/TinyML filters, and advertises the resulting clinical vitals as a standard Bluetooth Low Energy (BLE) GATT server.
 
-- **Board:** Arduino Nano 33 BLE Sense (nRF52840, ARM Cortex-M4F @ 64 MHz)
-- **RAM:** 256 KB
-- **Flash:** 1 MB
-- **Sensors:**
-  - MAX30100 — Pulse oximetry (SpO2) + Heart Rate via PPG
-  - DS18B20 — Digital temperature probe (1-Wire)
-  - HX711 — Load cell amplifier for weight measurement
+## ⚙️ Software Architecture
 
-## Build System
+The firmware utilizes **FreeRTOS** to handle multitasking across the dual-core ESP32, ensuring that heavy I2C polling does not block the BLE transmission stack.
 
-Uses PlatformIO. See `platformio.ini` for board config, library deps, and
-build flags.
-
-## Directory Layout
-
-```
-src/
-├── main.cpp           — Arduino entry point (setup + loop)
-├── config.h           — Pin definitions, thresholds, constants
-├── sensors/           — Individual sensor hardware drivers
-├── fusion/            — Multi-sensor Kalman filter
-├── tinyml/            — TFLite Micro model + inference engine
-└── comms/             — BLE GATT service + ASCON-128 encryption
+```mermaid
+graph TD
+    subgraph FreeRTOS Tasks
+        Task1[Task 1: Sensor Polling<br/>(Core 0)]:::task
+        Task2[Task 2: TinyML Inference<br/>(Core 1)]:::task
+        Task3[Task 3: BLE Server<br/>(Core 0)]:::task
+    end
+    
+    Queue[(FreeRTOS Queue<br/>Raw PPG Buffers)]:::queue
+    Mutex((I2C Mutex)):::mutex
+    
+    Task1 -- Write --> Queue
+    Task1 -- Lock/Unlock --> Mutex
+    
+    Queue -- Read --> Task2
+    Task2 -- Clean State --> Task3
+    
+    classDef task fill:#e3f2fd,stroke:#1565c0
+    classDef queue fill:#fff3e0,stroke:#e65100
+    classDef mutex fill:#f3e5f5,stroke:#7b1fa2
 ```
 
-## Safety Design
+## 🧩 Modularity Structure
 
-The TinyML model is the system's **ultimate safety net**. It does not depend
-on the Android phone, the PHC gateway, or any network connectivity. If the
-phone crashes and the gateway is offline, this firmware still detects life-
-threatening vital sign patterns and fires a local hardware alarm (buzzer/LED).
+- **`src/main.cpp`**: Bootstraps the RTOS tasks and defines the GATT Service UUIDs (Heart Rate Service, Pulse Oximeter Service, Health Thermometer Service).
+- **`lib/`**: Contains optimized wrappers for the MAX30102 and MLX90614 sensors.
+- **`platformio.ini`**: Defines the hardware target (`esp32dev`), baud rates, and library dependencies.
+
+## 🛠️ Status LEDs
+The firmware operates a simple RGB LED on the chassis:
+- 🔵 **Blinking Blue**: Advertising / Waiting for Android tablet to pair.
+- 🟢 **Solid Green**: Paired and actively transmitting clean signals.
+- 🔴 **Blinking Red**: Motion artifact detected or sensor physically removed from finger.
+
+## 🚀 Flashing
+```bash
+cd firmware/sensor_pack
+pio run -t upload
+```
