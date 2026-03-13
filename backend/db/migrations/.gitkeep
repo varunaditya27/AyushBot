@@ -1,0 +1,14 @@
+This directory contains Alembic database migration scripts.
+
+Alembic manages incremental schema changes to the SQLite database on the
+PHC gateway. When the backend's ORM models (db/models.py) are updated,
+a new migration script is generated and applied on the next gateway startup.
+
+Migration workflow:
+  1. Modify db/models.py with the schema change
+  2. Run: alembic revision --autogenerate -m "description"
+  3. Review the generated migration script
+  4. Test in CI: alembic upgrade head
+  5. Deploy to gateway: migration runs automatically on startup
+
+Migrations are forward-only in production (no downgrades).

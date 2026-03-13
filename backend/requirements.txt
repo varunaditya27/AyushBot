@@ -1,0 +1,63 @@
+# =============================================================================
+# AyushBot Backend — Python Dependencies (requirements.txt)
+# =============================================================================
+#
+# PURPOSE:
+#   Lists all Python package dependencies for the backend service.
+#   Install with: pip install -r requirements.txt
+#
+# DEPENDENCY GROUPS:
+#
+# --- API Framework ---
+# fastapi                  # Async web framework
+# uvicorn[standard]        # ASGI server with HTTP/2 and WebSocket support
+# pydantic>=2.0            # Data validation and serialization
+# python-multipart         # File upload support for sync endpoints
+#
+# --- Database ---
+# sqlalchemy>=2.0          # ORM for SQLite
+# alembic                  # Database migration management
+# aiosqlite                # Async SQLite driver for FastAPI
+#
+# --- RAG Pipeline ---
+# sentence-transformers    # Bi-encoder (all-MiniLM-L6-v2) and cross-encoder
+# faiss-cpu                # Facebook HNSW vector index (CPU version for RPi 4)
+# rank-bm25                # Sparse BM25 retrieval
+# pymupdf                  # PDF text extraction for corpus ingestion
+#
+# --- LLM ---
+# llama-cpp-python         # GGUF model inference (Phi-3 Mini / Gemma-3)
+# jinja2                   # Prompt template rendering
+#
+# --- Federated Learning ---
+# flwr                     # Flower FL framework (client + common)
+# opacus                   # PyTorch differential privacy (for DP mechanism)
+#
+# --- ML / Numerical ---
+# numpy                    # Array operations
+# scipy                    # Scientific computing (Kalman filter, statistics)
+# scikit-learn             # Preprocessing, metrics
+# xgboost                  # Triage classifier (Agent 1 model)
+# onnxruntime              # Optional: ONNX model inference
+#
+# --- Language Agent ---
+# transformers             # Hugging Face Transformers (IndicBERT, IndicTrans2)
+# tokenizers               # Fast tokenization
+# torchaudio               # TTS audio processing
+#
+# --- Utilities ---
+# pyyaml                   # YAML config file parsing
+# httpx                    # Async HTTP client (for health checks)
+# prometheus-client        # Metrics export for monitoring
+# structlog                # Structured JSON logging
+# cryptography             # TLS certificate handling
+# zeroconf                 # mDNS service discovery for local network
+#
+# --- Development Only (not installed in production Docker image) ---
+# pytest                   # Testing framework
+# pytest-asyncio           # Async test support
+# httpx                    # Test client for FastAPI
+# ruff                     # Linting
+# black                    # Code formatting
+# mypy                     # Type checking
+# =============================================================================

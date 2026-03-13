@@ -1,0 +1,19 @@
+This directory contains Mosquitto MQTT broker security configuration files.
+
+The Mosquitto broker runs on the PHC gateway and handles the BLE-to-backend
+sensor data pipeline. It receives ASCON-encrypted vital sign data from the
+ASHA's Android phone (which acts as a BLE-to-MQTT bridge) and delivers it
+to the backend for processing.
+
+Expected files after deployment:
+  - mosquitto.conf  — Main broker configuration (symlinked from infra/mosquitto/)
+  - acl.conf        — Access Control List defining per-topic permissions
+  - passwd          — Hashed password file for MQTT clients
+
+Security configuration:
+  - TLS 1.3 required for all connections
+  - Client certificate authentication (mTLS) for gateway-to-cloud channels
+  - Username/password authentication for local phone-to-gateway connections
+  - ACL rules restrict each ASHA's phone to its own patient data topics
+
+See infra/mosquitto/ for the canonical configuration templates.
