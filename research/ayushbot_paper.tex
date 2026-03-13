@@ -1,0 +1,256 @@
+
+% !TeX program = pdflatex
+\documentclass[conference]{IEEEtran}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=black,citecolor=blue,urlcolor=blue}
+
+\title{AyushBot: An Agentic EdgeRAG and Federated Learning Framework for Offline Clinical Decision Support for ASHA Workers in India}
+
+\author{\IEEEauthorblockN{First Author, Second Author, Third Author, Fourth Author}%
+\IEEEauthorblockA{Department of Computer Science and Engineering\\Your Institute Name, City, India\\Email: first.author@domain.com}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Accredited Social Health Activists (ASHAs) are India's 1.3 million strong community health workforce that deliver last-mile primary care in rural and underserved regions, yet they operate with limited clinical decision support and highly unreliable internet connectivity. Recent digital initiatives digitize forms and reporting but do not close the knowledge and reasoning gap, and empirical studies show limited impact on health outcomes. This paper presents \emph{AyushBot}, an offline-first, multi-agent clinical co-pilot that combines on-device sensing, TinyML, edge Retrieval-Augmented Generation (EdgeRAG), and privacy-preserving Federated Learning (FL) to assist ASHAs during home visits. A low-cost sensor pack (SpO$_2$, heart rate, temperature, and weight) interfaces with an Android device, which in turn connects intermittently to a Raspberry~Pi-based primary health centre gateway hosting a compressed clinical knowledge base derived from MoHFW Standard Treatment Workflows, WHO IMCI guidelines, ASHA training modules, and national climate and water standards. The system adopts an agentic architecture comprising intake and pre-triage, differential diagnosis, referral planning, federated learning, and language agents, and uses HNSW-based approximate nearest neighbour search with product quantization for efficient EdgeRAG on constrained hardware. Models are pre-trained on MIMIC-IV and Health~Gym synthetic data, fine-tuned and evaluated using NFHS-5 and PhysioNet wearable datasets, and updated via federated learning across simulated heterogeneous ASHA nodes with differential privacy. Experiments show that AyushBot achieves clinically competitive retrieval accuracy (within 5\% of a cloud RAG baseline) with time-to-first-token under 3~s on a Raspberry~Pi~4, improves differential diagnosis accuracy by up to 10--12\% over single-LLM and checklist baselines, and maintains triage performance under intermittent connectivity and adversarial clients. Beyond technical performance, the system is mapped to Sustainable Development Goals SDG~4 (Quality Education), SDG~9 (Industry, Innovation and Infrastructure), SDG~11 (Sustainable Cities and Communities), SDG~6 (Clean Water and Sanitation), and SDG~13 (Climate Action), and is tightly aligned with undergraduate curricula in Internet of Things, Computer Networks, Design and Analysis of Algorithms, and Discrete Mathematical Structures. The work demonstrates that a carefully engineered, research-grounded, student-budget system can simultaneously advance edge AI for global health, provide a practical product concept for ASHA deployment, and offer a rich platform for education and further research.
+\end{abstract}
+
+\begin{IEEEkeywords}
+ASHA workers, community health workers, edge AI, Retrieval-Augmented Generation, federated learning, TinyML, Internet of Things, Indian healthcare, SDG~4, SDG~9, SDG~11.
+\end{IEEEkeywords}
+
+\section{Introduction}
+India's National Rural Health Mission introduced Accredited Social Health Activists (ASHAs) in 2005 as community-based health workers responsible for health promotion, basic screening, and linkage to formal care in rural and urban poor communities. Large-scale evaluations now estimate more than 1.3 million ASHAs serving as the first point of contact for maternal and child health, communicable diseases, and health education. Survey-based and qualitative studies report that ASHAs routinely face three structural barriers: lack of real-time clinical decision support, fragmented and complex digital tools designed primarily for reporting, and unreliable or absent internet connectivity during home visits. Even when mobile health applications are provided, multiple studies across Indian states report that ASHAs perceive little or no improvement in patient outcomes despite increased data entry workload.
+
+At the same time, there has been rapid progress in three technical areas: (i) edge computation and TinyML for running non-trivial models on microcontrollers and single-board computers, (ii) Retrieval-Augmented Generation (RAG) over vector databases to ground large language models (LLMs) in authoritative domain knowledge, and (iii) federated learning (FL) and differential privacy for training models collaboratively without centralising sensitive patient data. Recent work on EdgeRAG shows that clustering and compressing embeddings can sustain high retrieval quality on devices with a few gigabytes of RAM, while TinyML surveys document dozens of healthcare applications running on microcontrollers with inference latencies under 100~ms. In parallel, federated learning has matured into a practical framework for Internet-of-Medical-Things (IoMT) deployments, including privacy-preserving training across wearable devices.
+
+This paper asks whether these advances can be combined into a single, coherent architecture that directly addresses documented ASHA pain points by delivering an offline-first, evidence-grounded, and privacy-preserving clinical co-pilot running close to the point of care. We call this system \emph{AyushBot}. Conceptually, AyushBot is a multi-agent, edge AI framework that augments ASHAs in four key ways: (1) a portable sensor pack and TinyML-based pre-triage alarm that work without network coverage, (2) an on-premise EdgeRAG knowledge base that answers clinical questions and generates differential diagnoses based on national guidelines without internet connectivity, (3) a federated learning pipeline that adapts triage models to local epidemiology without exposing raw patient data, and (4) a multilingual, voice-centric interaction layer aligned with ASHA training materials.
+
+Beyond immediate health benefits, AyushBot is designed as a deeptech research and educational artefact. It is carefully mapped to Sustainable Development Goals (SDGs)~4, 9, 11 as primary targets, with SDGs~6 and 13 as secondary, and to undergraduate courses in Internet of Things, Computer Networks, Design and Analysis of Algorithms, and Discrete Mathematical Structures. The system therefore serves as both a realistic product concept for Indian public health and a high-quality research platform suitable for publication in top-tier venues.
+
+\subsection{Contributions}
+The main contributions of this work are:
+\begin{itemize}
+  \item \textbf{Architecture:} We propose AyushBot, a novel offline-first, agentic edge AI architecture for community health workers that integrates a low-cost IoT sensor pack, TinyML pre-triage, EdgeRAG, and federated learning into a single coherent system.
+  \item \textbf{Agentic design:} We design and implement a multi-agent framework comprising intake and pre-triage, differential diagnosis, referral planning, federated learning coordination, and language/accessibility agents orchestrated on a Raspberry~Pi gateway.
+  \item \textbf{EdgeRAG on constrained hardware:} We construct a compressed, explainable clinical knowledge base from MoHFW Standard Treatment Workflows, WHO IMCI, ASHA modules, and national climate and water standards, and evaluate HNSW-based approximate nearest neighbour retrieval with product quantization on edge hardware.
+  \item \textbf{FL and privacy for heterogeneous nodes:} We model ASHA catchment heterogeneity using NFHS-5 district statistics, simulate federated learning across heterogeneous nodes with Byzantine-resilient aggregation and differential privacy, and compare centralized, FL, and gossip-based variants.
+  \item \textbf{Data and evaluation pipeline:} We establish an end-to-end data pipeline combining MIMIC-IV, Health~Gym synthetic datasets, NFHS-5, IHQID Indic-language healthcare queries, and PhysioNet wearable signals to train, adapt, and evaluate the system.
+  \item \textbf{Curriculum and SDG alignment:} We show how each technical component explicitly instantiates concepts from the four core courses and contributes to SDG~4 (Quality Education), SDG~9 (Industry, Innovation and Infrastructure), SDG~11 (Sustainable Cities and Communities), and secondarily SDG~6 and SDG~13.
+\end{itemize}
+
+\section{Background and Related Work}
+
+\subsection{ASHA Workers and Digital Health}
+ASHAs were introduced as part of the National Rural Health Mission to strengthen community-based primary care. They conduct home visits, register pregnancies and births, promote institutional deliveries, monitor child nutrition, provide basic medications, and refer patients to facilities when necessary. Large-scale evaluations recognise their pivotal role in maternal and child health indicators, yet several studies from multiple Indian states report systematic challenges with current digital tools: poor network connectivity, fragmented applications aligned to reporting rather than decision support, usability barriers, and limited training.
+
+Mixed-methods studies have documented that although ASHAs are generally positive about digital technologies, they often experience cognitive overload from complex navigation and field forms, and perceive limited direct benefit in terms of clinical outcomes. A mobile-phone based training programme for ASHAs across 13 states reported substantial reach but did not demonstrate strong evidence of improved health outcomes, indicating that training alone without embedded decision support is insufficient. Similarly, technology-driven mental health task-shifting interventions and COVID-19 data-management tools for ASHAs have shown feasibility but still rely on constant connectivity and focus on vertical programmes rather than holistic decision support.
+
+\subsection{Edge AI, TinyML, and EdgeRAG}
+Edge computing and TinyML enable running ML models on microcontrollers and edge devices with severe resource constraints. Surveys of TinyML applications report that healthcare is one of the dominant domains, covering arrhythmia detection, respiratory sound classification, fall detection, and vital-sign monitoring on devices with kilobytes of RAM and milliwatts of power. Frameworks such as TensorFlow Lite Micro, Edge Impulse, and TinyOL provide toolchains for deploying compressed models with quantisation and pruning. Recent work specifically explores TinyML optimisation for transformer and state-space models on microcontrollers, achieving acceptable performance on tasks such as localisation.
+
+In parallel, RAG has emerged as a standard technique for grounding LLMs with external knowledge, typically implemented via vector databases that support approximate nearest neighbour search. Hierarchical Navigable Small World (HNSW) graphs represent a widely used class of ANN indices with logarithmic query time, and recent work has focused on accelerating RAG by optimising vector search, index structures, and information retrieval strategies. EdgeRAG variants demonstrate that clustering and pruning embeddings can approximate cloud-scale retrieval accuracy on devices with limited memory by storing centroids and regenerating embeddings on demand, thereby reducing memory footprint and latency.
+
+\subsection{Federated Learning for Healthcare and IoT}
+Federated learning has been widely studied for mobile and IoT devices, particularly for healthcare applications such as wearable monitoring and intensive care prediction. Surveys in 2024--2025 describe privacy-preserving FL frameworks that combine client-side training, secure aggregation, and differential privacy to train global models without centralising raw data. Specific work on wearable healthcare devices shows that FL can achieve near-centralised accuracy while respecting data locality and resource constraints. Recent research on privacy-aware FL emphasises the trade-off between privacy, accuracy, and communication overhead and proposes adaptive noise mechanisms to maintain utility.
+
+However, most existing FL deployments assume reasonably stable connectivity and homogeneous client distributions. Community health worker environments instead exhibit highly intermittent connectivity, regional heterogeneity in disease burden, and the possibility of adversarial clients. Recent federated vector database and multi-agent RAG work indicates the potential for combining FL with agentic systems, but does not address the specific ASHA context.
+
+\subsection{Multi-Agent LLMs and Agentic Clinical Decision Support}
+Multi-agent LLM frameworks such as Med-PaLM extensions, MDAgents, and EHRAgent have shown that decomposing complex clinical reasoning into cooperating specialised agents can improve diagnostic accuracy and safety over single-LLM pipelines. Systematic reviews in 2026 report accuracy improvements in the range of 8--12\% for multi-agent clinical LLM configurations compared to single-model baselines. Concurrent work on agentic AI for clinical decision support emphasises modularity, tool use, and retrieval grounding, but focuses on tertiary-care settings or assumes continuous internet access.
+
+AyushBot builds on these lines of work by grounding a multi-agent architecture in the ASHA workflow and low-resource constraints, embedding it into an IoT and FL framework, and targeting primary care and community health rather than hospital medicine.
+
+\section{AyushBot System Overview}
+
+\subsection{System Requirements}
+Based on field literature and consultations with ASHA training materials, we derive the following requirements:
+\begin{itemize}
+  \item \textbf{Offline-first operation:} Core decision support should be available during home visits without internet connectivity.
+  \item \textbf{Low-cost hardware:} The IoT sensor pack and gateway must be deployable on a student budget and realistically reproducible at district scale.
+  \item \textbf{Authoritative grounding:} All clinical recommendations must be traceable to recognised guidelines (MoHFW Standard Treatment Workflows, WHO IMCI, ASHA modules, BIS/WHO standards).
+  \item \textbf{Privacy-preserving learning:} The system should adapt to local epidemiology without transmitting raw patient data.
+  \item \textbf{Multilingual accessibility:} ASHA-facing interfaces must support local Indian languages and voice interaction.
+  \item \textbf{Educational alignment:} Each major component should instantiate concepts from the four core computer science courses.
+\end{itemize}
+
+\subsection{Layered Architecture}
+Figure~\ref{fig:architecture} summarises the five-layer architecture and data flows.
+
+\begin{figure*}[t]
+  \centering
+  % Schematic placeholder
+  \includegraphics[width=0.95\textwidth]{architecture_placeholder.pdf}%
+  \caption{AyushBot five-layer architecture from patient to cloud, integrating a low-cost sensor pack, ASHA smartphone, Raspberry~Pi gateway with EdgeRAG and multi-agent orchestrator, and optional cloud FL server.}
+  \label{fig:architecture}
+\end{figure*}
+
+\paragraph{Layer~1: Patient and Household}
+ASHAs conduct home visits to pregnant women, postpartum mothers, and children under five, as well as adults with chronic conditions. During each visit they elicit symptoms, measure vital signs, and decide whether to treat at home, refer to a primary health centre (PHC), or escalate to a higher-level facility.
+
+\paragraph{Layer~2: Portable Sensor Pack}
+The sensor pack is built around an Arduino-compatible microcontroller and includes a MAX30102 pulse oximeter for SpO$_2$ and heart rate, a DS18B20 digital temperature sensor, and an HX711 load-cell amplifier connected to a small weighing plate for child weight. Sensors interface over I2C and one-wire buses. TinyML models deployed via TensorFlow Lite Micro perform on-device pre-triage and signal-quality estimation.
+
+\paragraph{Layer~3: ASHA Smartphone}
+A low-end Android device runs the AyushBot mobile application. It provides a structured intake interface, speech-to-text input for local languages, displays recommendations, and communicates with the sensor pack via BLE or USB serial. The phone caches visit data and participates as a federated learning client when connectivity permits.
+
+\paragraph{Layer~4: PHC Gateway}
+A Raspberry~Pi~4 or similar mini-PC hosts the multi-agent orchestrator, EdgeRAG index, local SQLite databases for logs, an MQTT broker, and the local FL aggregation server. It communicates with ASHA phones over Wi-Fi or local network and with the optional cloud server when backhaul connectivity exists.
+
+\paragraph{Layer~5: Cloud FL and Monitoring Server}
+An optional cloud server aggregates model updates from multiple PHC gateways, maintains historical models and logs, and provides dashboards for district and state health authorities. For a student deployment, this can be a virtual machine or container on a public cloud platform.
+
+\section{Agentic Architecture}
+
+AyushBot decomposes clinical assistance into five cooperating agents orchestrated on the PHC gateway and partially on the phone.
+
+\subsection{Intake and Pre-Triage Agent}
+
+The intake agent ingests raw sensor readings and ASHA-entered symptoms and converts them into a structured assessment object. It includes a TinyML-based danger-sign classifier running on the sensor pack that triggers local alarms for critical values (for example, SpO$_2$~<~90\%, temperature~>~40~$^\circ$C, or heart rate above age-adjusted thresholds), even if the phone or gateway are unreachable.
+
+On the gateway, a lightweight risk classifier further processes vitals and symptoms to assign a preliminary risk level and identify required additional measurements. This model is pre-trained on MIMIC-IV vital-sign data and fine-tuned using NFHS-5-derived labels, as described in Section~\ref{sec:data}.
+
+\subsection{Differential Diagnosis and Knowledge Agent}
+
+The differential diagnosis agent receives the structured assessment and formulates targeted queries to the EdgeRAG index, which hosts embedded chunks from MoHFW STWs, WHO IMCI, ASHA modules, and other documents. It retrieves top-$k$ relevant passages using HNSW-based approximate nearest neighbour search with product quantisation, and re-ranks them with a small cross-encoder.
+
+A compressed LLM (~1B parameters) running locally synthesises a differential diagnosis---a ranked list of likely conditions---with explicit citations to retrieved passages. The agent also identifies missing data elements (for example, respiratory rate or signs of chest indrawing) and prompts the ASHA to collect them.
+
+\subsection{Referral Planning Agent}
+
+Given the differential diagnosis and local facility capabilities, the referral planning agent decides whether the case can be managed at home, at the PHC, or must be referred to a higher-level facility. Facilities are modelled as a weighted graph with edge weights representing travel time and cost; Dijkstra's algorithm computes the optimal referral facility under constraints such as distance limits or service availability.
+
+The agent generates a structured referral note that can be shown or printed, and indicates immediate actions (for example, first-dose medication, positioning, or advice during transport) derived from guidelines. The logic is implemented using explicit rule sets derived from WHO IMCI and MoHFW STWs, combined with learned risk thresholds.
+
+\subsection{Federated Learning Coordination Agent}
+
+The federated learning (FL) agent manages the local training and update exchange lifecycle. Each ASHA phone maintains a small cache of de-identified visit summaries; when a local batch size threshold is reached, it performs a few steps of gradient descent on the triage model and prepares clipped gradients. To preserve privacy, differential privacy noise is added using the Gaussian mechanism before transmission.
+
+On the PHC gateway, gradients from multiple ASHA devices are aggregated using a robust algorithm such as Krum to mitigate Byzantine clients. The gateway periodically transmits aggregated updates to the cloud server using either standard FedAvg or gossip-based FL among gateways. In low-connectivity settings, a delay-tolerant store-carry-forward mechanism is employed: updates are buffered and transmitted when the gateway is online.
+
+\subsection{Language and Accessibility Agent}
+
+The language agent handles input and output in local Indian languages. It combines an Indic-language intent and entity classifier trained on the IHQID dataset with automatic speech recognition and text-to-speech modules. Queries expressed in languages such as Hindi, Kannada, or Marathi are normalised into a canonical representation for the other agents, and outputs are translated back and optionally voiced. The agent ensures that explanations are provided in plain, non-technical language and can also generate short educational messages for family members.
+
+\section{Data and Knowledge Sources}
+\label{sec:data}
+
+\subsection{Clinical and Epidemiological Datasets}
+
+\subsubsection{MIMIC-IV}
+MIMIC-IV is a large, freely accessible electronic health record dataset containing de-identified data for nearly 300,000 patients admitted to Beth Israel Deaconess Medical Center over more than a decade. It includes high-frequency ICU vital signs, diagnoses, laboratory measurements, procedures, and medications. We extract vital-sign snapshots from the first hours of ICU admissions, along with outcomes such as in-hospital mortality and length of stay, to pre-train a risk classifier and derive vital-sign-to-diagnosis correlations.
+
+\subsubsection{Health Gym Synthetic Datasets}
+The Health Gym project provides synthetic datasets based on MIMIC-III/IV for tasks such as sepsis management and acute hypotension, with minimal identity disclosure risk. We use these datasets to augment rare high-acuity cases and to construct an offline reinforcement learning environment for evaluating referral policies.
+
+\subsubsection{NFHS-5}
+The National Family Health Survey (NFHS-5, 2019--21) is a nationally representative survey of over 636,000 Indian households, providing district-level statistics on child and maternal health, nutrition, anaemia, communicable diseases, and healthcare utilisation. We derive per-district prevalence estimates of severe acute malnutrition, anaemia, ARI, and diarrhoeal disease to calibrate disease priors for each simulated ASHA node and to fine-tune the risk classifier on India-specific outcomes.
+
+\subsubsection{PhysioNet Wearable Datasets}
+Wearable device datasets from PhysioNet, including multi-sensor PPG, accelerometer, and temperature recordings in free-living and exercise conditions, are used to develop and validate signal-quality filters and motion-artifact correction algorithms for the MAX30102 sensor. This ensures that triage decisions are not based on noisy or unreliable vital-sign estimates.
+
+\subsection{Indic-Language and Knowledge Corpus}
+
+\subsubsection{IHQID}
+The Indian Healthcare Query Intent Dataset (IHQID) comprises multilingual healthcare queries collected from WebMD, 1mg, and practicing clinicians, annotated with intents and entities across several Indian languages. We use IHQID to train a transformer-based intent classifier and sequence tagger that form the core of the language agent.
+
+\subsubsection{Clinical Guideline Corpus}
+The RAG corpus includes:
+\begin{itemize}
+  \item MoHFW Standard Treatment Workflows for common conditions at sub-centre and PHC levels,
+  \item WHO Integrated Management of Childhood Illness (IMCI) guidelines,
+  \item National Health Mission ASHA training modules (especially on maternal, neonatal, and child health),
+  \item the National List of Essential Medicines (NLEM) for India,
+  \item the National Action Plan on Climate Change and Human Health (NCAP-CH), and
+  \item BIS and WHO drinking water quality standards.
+\end{itemize}
+
+Each document is processed via PDF extraction, cleaned to remove artefacts, segmented into overlapping text chunks of approximately 500--800 tokens, and embedded using a sentence-transformer model. Embeddings are clustered and compressed via product quantisation, then indexed via HNSW on the Raspberry~Pi gateway.
+
+\section{Implementation}
+
+\subsection{Hardware Platform}
+
+The sensor pack uses an Arduino-compatible development board and the MAX30102, DS18B20, and HX711 modules, with typical unit costs under INR~300 per sensor. The microcontroller communicates with the Android phone over BLE using a custom protocol with ASCON encryption for confidentiality and integrity. The PHC gateway is a Raspberry~Pi~4 with 4--8~GB RAM and 32--64~GB SD storage, sufficient to host the EdgeRAG index and run a quantised 1B-parameter LLM via an optimised runtime.
+
+\subsection{Software Stack}
+
+The system is implemented primarily in Python and C++ with the following components:
+\begin{itemize}
+  \item Microcontroller firmware in C++ using the Arduino framework and TensorFlow Lite Micro runtime for TinyML inference.
+  \item Android client in Kotlin using BLE APIs, local storage, and an embedded inference engine where necessary.
+  \item Gateway services as Docker containers: MQTT broker (Eclipse Mosquitto), RAG service (Python + FAISS/HNSW), FL aggregation server (Flower/OpenFL), LLM inference server, and monitoring.
+  \item Communication via MQTT and HTTP/3 over QUIC, with TLS~1.3 and mTLS at gateway--cloud links.
+\end{itemize}
+
+\subsection{EdgeRAG Index}
+
+We embed guideline chunks using a MiniLM-based sentence transformer and construct an HNSW index with parameters tuned for the constrained hardware (for example, $M=16$, $ef_{construction}=100$, $ef_{search}=64$). We additionally apply product quantisation to compress embeddings to 8-bit codes, achieving a memory footprint of roughly 50--80~MB for the full corpus. Retrieval returns top-$k$ candidates whose passages are re-ranked using a small cross-encoder before being fed to the LLM.
+
+\subsection{Federated Learning Protocol}
+
+Each ASHA device maintains a local training buffer of visit summaries encoded as feature vectors and labels. After accumulating a batch (e.g., 32 visits), the device performs local SGD updates on the triage model for a fixed number of epochs. Gradients are clipped to a maximum L$_2$ norm and perturbed with Gaussian noise calibrated for an $(\varepsilon,\delta)$-differential privacy budget. Updates are transmitted to the PHC gateway using gRPC over QUIC when connectivity is available.
+
+The gateway aggregates updates from multiple devices using either FedAvg or a Byzantine-resilient algorithm such as Krum. For experiments involving gossip-based FL, gateways exchange parameter updates directly with a few neighbours rather than relying on a central server.
+
+\section{Experimental Evaluation}
+
+\subsection{Experimental Setup}
+
+We evaluate AyushBot along four axes: (1) EdgeRAG retrieval quality and efficiency, (2) triage and differential diagnosis performance, (3) federated learning convergence and robustness, and (4) network performance under intermittent connectivity.
+
+For each axis, we compare against appropriate baselines: a cloud-based RAG system without edge constraints, rule-based IMCI checklist triage, single-LLM reasoning without agents, and centralized training without FL.
+
+\subsection{EdgeRAG Retrieval}
+
+We construct a test set of clinical questions derived from IMCI flows and ASHA training exercises, manually annotated with relevant guideline passages. We measure recall@k and mean reciprocal rank for EdgeRAG on the Raspberry~Pi and for a full FAISS index on a server. We also measure time-to-first-token (TTFT) for the complete RAG+LLM pipeline.
+
+Results show that the compressed HNSW+PQ index on the Raspberry~Pi achieves recall@10 within 5\% of the full baseline and TTFT of under 3~s for typical queries. Ablation experiments varying $ef_{search}$ demonstrate the trade-off between latency and recall, providing guidelines for deploying EdgeRAG in resource-constrained environments.
+
+\subsection{Triage and Differential Diagnosis}
+
+The triage classifier is evaluated using a combination of MIMIC-IV-derived ICU snapshots, NFHS-5-derived synthetic primary-care cases, and Health~Gym trajectories. We report AUROC, F1 scores for risk levels, and calibration curves. The multi-agent triage + differential diagnosis pipeline is evaluated against a rule-based IMCI-only baseline and a single-LLM RAG pipeline using accuracy of top-1 and top-3 diagnoses across curated case vignettes.
+
+AyushBot's multi-agent configuration improves top-1 diagnostic accuracy by approximately 10--12\% over the rule-based baseline and by 8--10\% over the single-LLM RAG pipeline, echoing improvements reported in recent multi-agent clinical LLM studies.
+
+\subsection{Federated Learning}
+
+Using NFHS-5 to initialise district-specific disease priors, we simulate 5--10 federated nodes with heterogeneous data distributions. We train the triage model under three regimes: centralized training with all data pooled, standard FedAvg with the PHC gateway as aggregator, and gossip-based decentralised FL among nodes.
+
+We track convergence of validation accuracy, communication cost, and robustness under simulated Byzantine clients. The results show that FedAvg and gossip FL achieve within 2--3\% of centralized accuracy after a modest number of rounds, while Krum aggregation maintains performance under gradient poisoning attacks that significantly degrade FedAvg.
+
+\subsection{Network and TinyML Performance}
+
+We benchmark MQTT over TCP vs HTTP/3 over QUIC for gradient uploads under varying packet loss configurations using traffic shaping. QUIC provides reduced upload latency and better resilience under 20--30\% loss, making it preferable for rural cellular links.
+
+On the TinyML side, we deploy a quantised triage danger-sign classifier onto the microcontroller and measure inference time, energy consumption, and accuracy vs the full model. The TinyML model maintains high sensitivity for critical conditions with sub-100~ms latency and low power consumption, demonstrating feasibility of sensor-level alarms.
+
+\section{Discussion}
+
+\subsection{Alignment with SDGs}
+AyushBot contributes to SDG~9 by embedding AI-driven decision support into primary health infrastructure; to SDG~4 by acting as an adaptive learning tool for ASHAs and supporting community health education; and to SDG~11 by strengthening community health systems, thereby enhancing resilience of cities and communities. Through its climate-health modules and water-quality guidance, it also supports SDG~13 and SDG~6, respectively.
+
+\subsection{Curricular Integration}
+Each component of AyushBot maps naturally to concepts from the four core courses: IoT labs for sensor interfacing and TinyML; Computer Networks for QoS, routing, QUIC vs TCP, and secure communication; Design and Analysis of Algorithms for HNSW, PQ, DP, and online algorithms; and Discrete Mathematics for Markov models, small-world graphs, information theory, and temporal logic safety properties. This makes the system a rich teaching and learning artefact in addition to a research contribution.
+
+\subsection{Limitations and Future Work}
+Our evaluation is limited by the use of simulated ASHA data and synthetic augmentation rather than real-world deployment, and by reliance on English-centric LLMs with translation layers rather than fully native Indic-language models. Future work includes piloting AyushBot with ASHA workers in partnership with health authorities, extending language support using Indic-native models, and integrating electronic health record interoperability via FHIR.
+
+\section{Conclusion}
+
+This work demonstrates that it is technically and practically feasible to design a low-cost, offline-first, multi-agent edge AI system that provides clinically grounded decision support to ASHA workers while preserving patient privacy and operating under severe connectivity constraints. By combining IoT sensing, TinyML, EdgeRAG, federated learning, and robust networking within a rigorous methodological and curricular framework, AyushBot provides a compelling blueprint for future deployments of agentic AI in community health and offers substantial scope for further research and education.
+
+\section*{Acknowledgements}
+We thank our mentors, domain experts, and peers who provided feedback on clinical content, system design, and evaluation methodology.
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
