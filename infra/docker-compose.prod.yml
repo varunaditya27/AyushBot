@@ -1,0 +1,38 @@
+# =============================================================================
+# AyushBot Infrastructure — Docker Compose Production Overrides
+# =============================================================================
+#
+# PURPOSE:
+#   Production-specific Docker Compose overrides layered on top of the base
+#   docker-compose.yml. Applies security hardening, resource limits, and
+#   monitoring configurations suitable for deployment on PHC gateways.
+#
+# OVERRIDES:
+#
+#   gateway:
+#     - restart: always (auto-restart on crash — critical for unattended PHC)
+#     - LOG_LEVEL: WARNING (reduce disk I/O)
+#     - read_only: true (immutable filesystem for security)
+#     - tmpfs: /tmp (writable temp only in memory)
+#     - healthcheck: curl http://localhost:8000/health every 30s
+#
+#   mosquitto:
+#     - restart: always
+#     - Enforce TLS-only (disable plain MQTT on port 1883)
+#     - Client certificate required (mTLS)
+#
+#   monitoring (new service):
+#     - Lightweight metrics exporter (Prometheus node_exporter or similar)
+#     - Exports: CPU/RAM/disk usage, service health, inference latency
+#     - Scraped by the cloud Prometheus (when connectivity available)
+#
+# RESOURCE LIMITS (RPi 4 with 4 GB RAM):
+#   - gateway: 2.5 GB RAM, 3 CPUs
+#   - mosquitto: 256 MB RAM, 0.5 CPU
+#   - redis: 256 MB RAM, 0.5 CPU
+#   - monitoring: 128 MB RAM, 0.25 CPU
+#   - Total: ~3.1 GB (leaving ~900 MB for OS and LLM model pages)
+#
+# USAGE:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# =============================================================================

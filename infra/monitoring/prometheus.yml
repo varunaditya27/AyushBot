@@ -1,0 +1,52 @@
+# =============================================================================
+# AyushBot Infrastructure — Prometheus Monitoring Configuration
+# =============================================================================
+#
+# PURPOSE:
+#   Prometheus scrape configuration for monitoring the PHC gateway and
+#   cloud services. Collects metrics on system health, inference latency,
+#   FL training progress, and sensor data quality.
+#
+# SCRAPE TARGETS:
+#
+#   1. Gateway Backend (FastAPI)
+#      Endpoint: http://gateway:8000/metrics
+#      Metrics exposed:
+#        - triage_requests_total (counter): Total triage API calls
+#        - triage_latency_seconds (histogram): End-to-end triage latency
+#        - llm_inference_seconds (histogram): Phi-3 inference time
+#        - rag_retrieval_seconds (histogram): FAISS retrieval time
+#        - active_sessions (gauge): Currently active triage sessions
+#        - risk_level_distribution (counter by label): Triage outcome counts
+#
+#   2. Node Exporter (System Metrics)
+#      Endpoint: http://node-exporter:9100/metrics
+#      Metrics: CPU usage, RAM usage, disk I/O, temperature (RPi thermal),
+#               network I/O, SD card health
+#
+#   3. Mosquitto MQTT Broker
+#      Endpoint: http://mosquitto-exporter:9234/metrics
+#      Metrics: Connected clients, messages received/sent, subscription count,
+#               message queue depth
+#
+#   4. Cloud FL Server (when reachable)
+#      Endpoint: https://cloud.ayushbot:9090/metrics
+#      Metrics: FL rounds completed, participating nodes, global model accuracy,
+#               gradient aggregation latency
+#
+# ALERTING RULES (in separate alerts.yml):
+#   - Gateway down for > 2 minutes → CRITICAL
+#   - RAM usage > 90% → WARNING
+#   - RPi CPU temperature > 75°C → WARNING (throttling imminent)
+#   - LLM inference latency > 30 seconds → WARNING
+#   - MQTT broker disconnected → CRITICAL
+#   - FL sync not completed in > 7 days → WARNING
+#
+# RETENTION:
+#   - Local storage: 7 days (RPi SD card space constraint)
+#   - Remote write to cloud Prometheus when connectivity available
+#
+# DEPLOYMENT:
+#   Prometheus runs as a Docker container in the gateway stack.
+#   See docker-compose.yml for the service definition.
+# =============================================================================
