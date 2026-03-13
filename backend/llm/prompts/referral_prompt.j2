@@ -1,0 +1,34 @@
+{# =========================================================================== #}
+{# AyushBot — Referral Letter / Summary Prompt Template (Jinja2)              #}
+{# =========================================================================== #}
+{#                                                                             #}
+{# PURPOSE:                                                                    #}
+{#   This template generates a concise clinical referral summary that Agent 3  #}
+{#   can include in the referral slip. It takes the differential diagnosis     #}
+{#   output from Agent 2 and the patient context, and produces a brief         #}
+{#   natural-language paragraph suitable for the receiving doctor at the PHC,   #}
+{#   CHC, or District Hospital.                                                #}
+{#                                                                             #}
+{# TEMPLATE VARIABLES:                                                         #}
+{#   - patient: dict — Same structure as diagnosis_prompt.j2                   #}
+{#   - differential_diagnosis: list[dict] — Agent 2's output (ranked diagnoses #}
+{#     with citations and evidence summaries)                                  #}
+{#   - action_plan: dict — Agent 3's referral plan (facility, drugs, urgency)  #}
+{#   - asha_name: str — Name of the referring ASHA worker                      #}
+{#   - referral_date: str — ISO date of the referral                           #}
+{#                                                                             #}
+{# OUTPUT:                                                                     #}
+{#   A 3-5 sentence clinical summary paragraph:                                #}
+{#     "[Patient name], [age], presented with [symptoms list] and vital signs  #}
+{#      showing [relevant abnormalities]. Based on [protocol name], the        #}
+{#      provisional assessment is [primary diagnosis]. [Drug] was administered #}
+{#      prior to referral. Please evaluate for [condition] and consider        #}
+{#      [suggested investigations]. Referred by ASHA [name] from [village]."   #}
+{#                                                                             #}
+{# DESIGN NOTES:                                                               #}
+{#   - This is a much simpler template than diagnosis_prompt.j2                #}
+{#   - The output is plain text, not JSON                                      #}
+{#   - Used for generating the "referral_summary" field in the ReferralSlip    #}
+{#     schema (see schemas/action_plan.py)                                     #}
+{#   - The LLM's role here is purely editorial — it formats, not reasons       #}
+{# =========================================================================== #}

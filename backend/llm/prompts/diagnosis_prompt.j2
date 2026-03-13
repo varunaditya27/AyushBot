@@ -1,0 +1,43 @@
+{# =========================================================================== #}
+{# AyushBot — Differential Diagnosis Prompt Template (Jinja2)                 #}
+{# =========================================================================== #}
+{#                                                                             #}
+{# PURPOSE:                                                                    #}
+{#   This Jinja2 template assembles the full prompt sent to the quantized LLM  #}
+{#   (Phi-3 Mini / Gemma-3) during Agent 2's clinical synthesis step.          #}
+{#                                                                             #}
+{# TEMPLATE VARIABLES (provided by inference.py):                              #}
+{#   - system_prompt: str — Loaded from system_prompt.txt                      #}
+{#   - patient: dict — Patient context from the State Object:                  #}
+{#       - age_months: int                                                     #}
+{#       - sex: str                                                            #}
+{#       - weight_kg: float                                                    #}
+{#       - vitals: dict (spo2, heart_rate, temperature)                        #}
+{#       - symptoms: list[str] (translated English clinical terms)             #}
+{#       - risk_level: str (from Agent 1)                                      #}
+{#       - checklist_flags: list[str] (active IMCI danger signs)               #}
+{#                                                                             #}
+{#   - evidence_chunks: list[dict] — Top-K reranked RAG chunks:               #}
+{#       - chunk_id: str                                                       #}
+{#       - text: str (the chunk content)                                       #}
+{#       - source_document: str                                                #}
+{#       - page_number: int                                                    #}
+{#       - section_heading: str                                                #}
+{#       - relevance_score: float                                              #}
+{#                                                                             #}
+{# TEMPLATE STRUCTURE:                                                         #}
+{#   1. System prompt (role + constraints)                                     #}
+{#   2. Patient presentation section (vitals + symptoms)                       #}
+{#   3. Evidence section (numbered chunks with source metadata)                #}
+{#   4. Task instruction (what to produce)                                     #}
+{#   5. Output format specification (JSON schema)                              #}
+{#                                                                             #}
+{# DESIGN NOTES:                                                              #}
+{#   - The prompt explicitly numbers each evidence chunk and references them   #}
+{#     by number, so the LLM can cite "Evidence [3]" in its response           #}
+{#   - The output JSON schema is included in the prompt so the LLM knows       #}
+{#     exactly what structure to produce                                        #}
+{#   - Temperature is set to 0.1 in inference.py (not in the template)         #}
+{#   - The template includes a "FORBIDDEN" section listing things the LLM      #}
+{#     must not do (hallucinate, prescribe drugs, give definitive diagnoses)    #}
+{# =========================================================================== #}
