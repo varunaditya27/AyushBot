@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
@@ -46,7 +47,7 @@ private val symptomList = listOf(
     SymptomItem("convulsions", "Convulsions", Icons.Rounded.ElectricBolt, "Danger Signs"),
     SymptomItem("unable_drink", "Unable to Drink", Icons.Rounded.WaterDrop, "Danger Signs"),
     SymptomItem("lethargic", "Lethargic", Icons.Rounded.Hotel, "Danger Signs"),
-    SymptomItem("vomiting", "Vomiting Everything", Icons.Rounded.SickOutlined, "Danger Signs"),
+    SymptomItem("vomiting", "Vomiting Everything", Icons.Rounded.Sick, "Danger Signs"),
     // Nutrition
     SymptomItem("wasting", "Severe Wasting", Icons.Rounded.MonitorWeight, "Nutrition"),
     SymptomItem("edema", "Bilateral Edema", Icons.Rounded.WaterDrop, "Nutrition"),
