@@ -1,4 +1,5 @@
 # Dataset Deep Dive: AyushBot ASHA Co-Pilot Pipeline
+
 ## Complete End-to-End Analysis of Every Dataset and Knowledge Source
 
 ---
@@ -47,9 +48,10 @@ The pipeline draws from four distinct data categories, each serving a different 
 
 ### What It Is
 
-MIMIC-IV is the world's largest publicly accessible de-identified electronic health record database. Published by MIT's Laboratory for Computational Physiology and sourced from Beth Israel Deaconess Medical Center (BIDMC) in Boston, it captures over a **decade of clinical care data (2008–2022)** for patients admitted to the emergency department and ICU. The dataset was published in *Scientific Data* (Nature) in 2023 and has been cited hundreds of times in AI/health research.
+MIMIC-IV is the world's largest publicly accessible de-identified electronic health record database. Published by MIT's Laboratory for Computational Physiology and sourced from Beth Israel Deaconess Medical Center (BIDMC) in Boston, it captures over a **decade of clinical care data (2008–2022)** for patients admitted to the emergency department and ICU. The dataset was published in _Scientific Data_ (Nature) in 2023 and has been cited hundreds of times in AI/health research.
 
 **Scale:**
+
 - **299,712 patients** (v3.0, October 2024)
 - **431,231 hospital admissions**
 - **73,181 ICU stays**
@@ -59,19 +61,20 @@ MIMIC-IV is the world's largest publicly accessible de-identified electronic hea
 
 MIMIC-IV is organized into five modules, each independently accessible:
 
-| Module | Tables | Key Contents |
-|---|---|---|
-| **hosp** (Hospital) | 31 tables | Demographics, diagnoses (ICD-9/10), lab events, prescriptions, procedures, microbiology |
-| **icu** | 6 tables | High-frequency vital signs (charted at 1–5 min intervals), ventilator settings, fluid balance |
-| **ed** | 7 tables | Emergency department triage, vital signs on arrival, disposition |
-| **note** | Clinical notes | Discharge summaries, radiology reports, nursing notes (requires separate credentialing) |
-| **cxr** | Chest X-ray images | 377,110 de-identified radiographs linked to clinical records |
-| **ecg** | 10-second 12-lead ECGs | 800,000+ diagnostic ECGs |
-| **waveform** | High-resolution waveforms | PPG, ECG at bedside frequency |
+| Module              | Tables                    | Key Contents                                                                                  |
+| ------------------- | ------------------------- | --------------------------------------------------------------------------------------------- |
+| **hosp** (Hospital) | 31 tables                 | Demographics, diagnoses (ICD-9/10), lab events, prescriptions, procedures, microbiology       |
+| **icu**             | 6 tables                  | High-frequency vital signs (charted at 1–5 min intervals), ventilator settings, fluid balance |
+| **ed**              | 7 tables                  | Emergency department triage, vital signs on arrival, disposition                              |
+| **note**            | Clinical notes            | Discharge summaries, radiology reports, nursing notes (requires separate credentialing)       |
+| **cxr**             | Chest X-ray images        | 377,110 de-identified radiographs linked to clinical records                                  |
+| **ecg**             | 10-second 12-lead ECGs    | 800,000+ diagnostic ECGs                                                                      |
+| **waveform**        | High-resolution waveforms | PPG, ECG at bedside frequency                                                                 |
 
 ### Key Variables (Most Relevant to AyushBot)
 
 **From `icu/chartevents`** (the single most used table — ~330 million rows):
+
 - Heart Rate (item ID 220045)
 - SpO2 / Pulse Oximetry (item ID 220277)
 - Respiratory Rate (item ID 220210)
@@ -80,13 +83,16 @@ MIMIC-IV is organized into five modules, each independently accessible:
 - GCS Eye/Verbal/Motor (consciousness scoring)
 
 **From `hosp/diagnoses_icd`:**
+
 - Primary and secondary diagnoses using ICD-9 and ICD-10 codes
 - 262 disease categories with >1,000 instances each
 
 **From `hosp/prescriptions`:**
+
 - Drug name, dose, route, frequency — useful for the drug-dosage lookup component
 
 **From `hosp/admissions`:**
+
 - Admission type, discharge disposition, length of stay, in-hospital mortality flag
 
 ### How MIMIC-IV Fits the AyushBot Pipeline
@@ -96,6 +102,7 @@ MIMIC-IV is organized into five modules, each independently accessible:
 The triage classifier is the core ML model in Agent 1 (Intake & Pre-Triage). Its job is: given a set of vital signs, predict risk level (Low / Medium / High / Critical).
 
 From MIMIC-IV, you extract:
+
 - **Input features:** Heart rate, SpO2, temperature, respiratory rate, GCS score at ICU admission
 - **Labels:** In-hospital mortality, ICU length of stay > 3 days, need for ventilation — these serve as proxy labels for "High/Critical" risk
 - **Extraction query:** Select all `chartevents` records within the first 2 hours of ICU admission, join with `admissions` for outcome labels
@@ -145,6 +152,7 @@ It is the **ground truth for India's primary care disease and health burden** �
 NFHS-5 introduced several new variables not in previous waves:
 
 **Child Health (0–5 years) — Most ASHA-relevant:**
+
 - Weight-for-age Z-score (SAM/MAM classification — directly maps to HX711 weight module)
 - Height-for-age Z-score (stunting)
 - MUAC (mid-upper arm circumference)
@@ -155,17 +163,20 @@ NFHS-5 introduced several new variables not in previous waves:
 - Treatment-seeking behavior (% taken to health facility)
 
 **Maternal Health:**
+
 - ANC visit coverage and timing
 - Institutional delivery rates by district
 - Postnatal care within 2 days
 - Tetanus toxoid vaccination coverage
 
 **ASHA Interaction Data:**
+
 - Percentage of women who received postnatal care from an ASHA
 - ASHA-facilitated institutional deliveries
 - ASHA-provided iron/folic acid supplements
 
 **New in NFHS-5:**
+
 - Blood pressure and blood glucose measurements (for adults 15+)
 - Waist and hip circumference
 - Disability assessment
@@ -190,6 +201,7 @@ You randomly partition NFHS-5 districts into 5–10 FL node groups, each reflect
 
 **1. India-Context Fine-Tuning:**
 Extract a derived feature matrix from NFHS-5:
+
 - Child: age_months, weight_for_age_z, haemoglobin_g_dl, diarrhea_2wk_flag, ari_2wk_flag
 - Outcome labels: severe_acute_malnutrition (yes/no), severe_anaemia (yes/no), treatment_sought (yes/no)
 
@@ -197,6 +209,7 @@ Fine-tune the MIMIC-IV pre-trained triage classifier on this India-specific feat
 
 **2. Disease Prior Distribution per FL Node:**
 For each simulated FL node (district cluster), compute:
+
 - P(diarrhea | under-5 child)
 - P(ARI | under-5 child)
 - P(SAM | under-5 child, rural)
@@ -225,13 +238,14 @@ After training, validate referral decisions against NFHS-5 treatment-seeking beh
 
 Health Gym is an open-source platform developed by researchers at UNSW Sydney, the George Institute for Global Health, and Imperial College London, funded by Wellcome Trust. It generates **highly realistic synthetic patient datasets** using Generative Adversarial Networks (GANs) trained on real clinical databases (primarily MIMIC-III/IV).
 
-Published in *Nature Scientific Data* (2022) and *JMIR Medical Education* (2024), Health Gym is designed specifically for ML research prototyping and education — no CITI training, no DUA, no access barriers.
+Published in _Nature Scientific Data_ (2022) and _JMIR Medical Education_ (2024), Health Gym is designed specifically for ML research prototyping and education — no CITI training, no DUA, no access barriers.
 
 The identity disclosure risk for Health Gym datasets was estimated at **0.045%** — essentially zero, making them safe for open use and sharing within your team.
 
 ### Available Datasets
 
 **1. Synthetic Sepsis Dataset (PhysioNet hosted)**
+
 - Generated from MIMIC-III sepsis cohort
 - Features: 48 hours of ICU vitals, labs, interventions
 - Variables: HR, MAP, temperature, GCS, creatinine, lactate, vasopressor use, fluid balance
@@ -239,11 +253,13 @@ The identity disclosure risk for Health Gym datasets was estimated at **0.045%**
 - **Pipeline use:** Augment MIMIC-IV training data with sepsis-like high-acuity cases; test the triage classifier's ability to identify severe systemic infection
 
 **2. Synthetic Acute Hypotension Dataset (PhysioNet hosted)**
+
 - Generated from MIMIC-III hypotension cohort
 - Variables: blood pressure, vasopressor dose, fluid input/output
 - **Pipeline use:** Train the triage classifier's shock/hypotension recognition; validate SpO2 + HR + BP feature interactions
 
 **3. Synthetic HIV/ART Dataset (FigShare hosted)**
+
 - Generated from real ART patient data
 - Variables: CD4 count, viral load, antiretroviral drug regimen
 - **Pipeline use:** Secondary use — extends the co-pilot's capability to HIV patients (relevant for India's rural burden); demonstrates multi-disease generalizability in the paper
@@ -253,6 +269,7 @@ The identity disclosure risk for Health Gym datasets was estimated at **0.045%**
 **Problem:** The MIMIC-IV + NFHS-5 combination gives you good coverage of common Indian primary care conditions (SAM, anaemia, ARI) but rare or acute conditions (septic shock, severe hypotension, severe malaria complication) will be underrepresented in your training data.
 
 **Solution:** Health Gym fills this gap by providing:
+
 1. **Rare-condition training examples** without any privacy or access concern
 2. **Counterfactual patient trajectories** — the GAN generates "what would happen if this patient received different interventions?" — useful for the referral agent's decision modeling
 3. **Team-shareable training data** — since there's no DUA, your full team can work with it simultaneously without individual credentialing
@@ -276,6 +293,7 @@ Health Gym was specifically designed for **offline reinforcement learning** — 
 IHQID (Indian Healthcare Query Intent Dataset) consists of two datasets — **IHQID-WebMD** and **IHQID-1mg** — published at EACL 2023 (Findings of the Association for Computational Linguistics, one of the top NLP venues). Created by researchers from IIT Kharagpur, it is the **only publicly available multilingual healthcare intent and entity dataset for Indian languages**.
 
 The datasets were created by:
+
 1. Crawling frequently asked questions from WebMD India and 1mg (India's largest online pharmacy)
 2. Collecting real-world healthcare queries from doctors at Indian hospitals
 3. Annotating with intent labels and named entity categories
@@ -286,6 +304,7 @@ The datasets were created by:
 **Languages:** English, Hindi, Bengali, Tamil, Telugu, Marathi, Gujarati (7 total)
 
 **Intent Classes:**
+
 - Symptom description ("I have chest pain and difficulty breathing")
 - Drug query ("What is the dose of ORS for a 2-year-old?")
 - Disease information ("What are signs of malaria?")
@@ -294,6 +313,7 @@ The datasets were created by:
 - Diagnostic query ("Why would SpO2 be low?")
 
 **Entity Categories:**
+
 - Disease names (e.g., "pneumonia", "malaria")
 - Drug names (e.g., "Amoxicillin", "Cotrimoxazole")
 - Symptoms (e.g., "fast breathing", "pallor", "fever")
@@ -301,6 +321,7 @@ The datasets were created by:
 - Dosages and frequencies
 
 **Scale:**
+
 - IHQID-WebMD: Hundreds of queries per language per intent class
 - IHQID-1mg: Similar scale with pharmacy/drug focus
 - Real-world hospital test set: 100 queries per language
@@ -310,6 +331,7 @@ The datasets were created by:
 **Agent 5: Language & Accessibility Agent**
 
 ASHA workers will interact with the co-pilot in their local language — typing or speaking in Kannada, Hindi, Tamil, Marathi, or Telugu. The Language Agent must:
+
 1. Identify the **intent** of the query (symptom report? drug question? referral decision?)
 2. Extract **named entities** (disease names, symptoms, drug names) from the local-language input
 3. Map them to standardized medical terms for the downstream agents
@@ -317,6 +339,7 @@ ASHA workers will interact with the co-pilot in their local language — typing 
 IHQID directly trains and evaluates this pipeline. The ACL 2023 paper provides baseline F1 scores for XLM-RoBERTa and mBERT on these tasks — you use these as your baseline comparison and attempt to beat them using a fine-tuned IndicBERT or AI4Bharat model.
 
 **Practical pipeline:**
+
 ```
 ASHA speaks in Kannada:
 "ಮಗುವಿಗೆ 3 ದಿನದಿಂದ ಭೇದಿ ಇದೆ, ತೂಕ ಕಡಿಮೆ ಇದೆ"
@@ -336,6 +359,7 @@ ASHA speaks in Kannada:
 ### Why a Dedicated Wearable Dataset Category?
 
 The MAX30100/30102 sensor on the Arduino is a real-world device operating in non-clinical conditions — the ASHA is holding it to the patient's finger during a home visit. In clinical settings, pulse oximetry is well-controlled. In field conditions, signal quality degrades from:
+
 - **Motion artifact** (patient moving)
 - **Poor perfusion** (cold hands, anemia reducing pulse amplitude)
 - **Ambient light interference** (bright sunlight)
@@ -346,6 +370,7 @@ A signal quality filter and motion artifact correction model must be trained on 
 ### Three Specifically Relevant PhysioNet Datasets
 
 **1. ScientISST MOVE (Multimodal Wearable Biosignals)**
+
 - **Signals:** ECG, EMG, EDA, PPG, Temperature, Accelerometer (ACC) — all simultaneous
 - **Device:** ScientISST Sense + Empatica E4 (wrist-worn wearables)
 - **Activities:** Everyday life activities in naturalistic environments (sitting, walking, typing, etc.)
@@ -353,12 +378,14 @@ A signal quality filter and motion artifact correction model must be trained on 
 - **Pipeline use:** Train signal quality classifier and motion artifact filter for the Arduino MAX30100 readings
 
 **2. BIG IDEAs Lab Glycemic Variability and Wearable Dataset**
+
 - **Signals:** Continuous glucose monitoring + wrist-worn wearable data (HR, EDA, Temperature, BVP, ACC)
 - **Participants:** High-normoglycemic participants
 - **Why it matters:** Provides wrist-worn Temperature and HR data under free-living conditions — the closest analog to what an ASHA's sensor pack will produce
 - **Pipeline use:** Validate that the temperature + HR feature fusion for triage is meaningful in wearable (vs clinical) signal quality conditions
 
 **3. Wearable Device Dataset from Induced Stress and Structured Exercise**
+
 - **Device:** Empatica E4 wristband
 - **Signals:** PPG/BVP (64 Hz), 3-axis Accelerometer (32 Hz), Infrared Thermopile (4 Hz), EDA (4 Hz)
 - **Participants:** 36 healthy volunteers during structured stress induction and aerobic/anaerobic exercise
@@ -394,43 +421,49 @@ The RAG corpus is not a "dataset" in the statistical ML sense — it is a **cura
 ### Document-by-Document Analysis
 
 **Document 1: ASHA Training Modules 1–7 (NHM India)**
-- *Source:* nhm.gov.in / nhsrcindia.org
-- *Content:* 7 progressive training modules covering ASHA duties, community health education, reproductive & child health, disease surveillance, and skill building. Module 6 & 7 cover clinical skills in most depth.
-- *Format:* PDF (Hindi + English versions available)
-- *RAG use:* Chunks about specific disease management procedures and referral criteria are the highest-retrieval-frequency items — this is what the ASHA co-pilot will query most.
-- *Critical note:* The ASHA Induction Module (NHM 2021) is freely downloadable from nhsrcindia.org. The full Module 6 & 7 PDFs are available on nhm.gov.in.
+
+- _Source:_ nhm.gov.in / nhsrcindia.org
+- _Content:_ 7 progressive training modules covering ASHA duties, community health education, reproductive & child health, disease surveillance, and skill building. Module 6 & 7 cover clinical skills in most depth.
+- _Format:_ PDF (Hindi + English versions available)
+- _RAG use:_ Chunks about specific disease management procedures and referral criteria are the highest-retrieval-frequency items — this is what the ASHA co-pilot will query most.
+- _Critical note:_ The ASHA Induction Module (NHM 2021) is freely downloadable from nhsrcindia.org. The full Module 6 & 7 PDFs are available on nhm.gov.in.
 
 **Document 2: Standard Treatment Workflows (MoHFW)**
-- *Source:* mohfw.gov.in
-- *Content:* Clinical protocols for 100+ conditions covering diagnosis criteria, first-line treatment, drug dosages, referral criteria. Organized by disease category.
-- *Format:* PDF (English)
-- *RAG use:* Primary source for the Referral Planning Agent — the referral criteria sections are chunked and indexed with high priority. Drug dosage tables are extracted as structured JSON and stored separately for faster lookup.
-- *Critical note:* Not all STWs are uniformly accessible in one document. The MoHFW website hosts them by disease category. You will need to download ~10–15 PDF documents, consolidate, and clean them. Estimated effort: 4–6 hours of corpus preparation.
+
+- _Source:_ mohfw.gov.in
+- _Content:_ Clinical protocols for 100+ conditions covering diagnosis criteria, first-line treatment, drug dosages, referral criteria. Organized by disease category.
+- _Format:_ PDF (English)
+- _RAG use:_ Primary source for the Referral Planning Agent — the referral criteria sections are chunked and indexed with high priority. Drug dosage tables are extracted as structured JSON and stored separately for faster lookup.
+- _Critical note:_ Not all STWs are uniformly accessible in one document. The MoHFW website hosts them by disease category. You will need to download ~10–15 PDF documents, consolidate, and clean them. Estimated effort: 4–6 hours of corpus preparation.
 
 **Document 3: WHO IMCI Guidelines (Integrated Management of Childhood Illness)**
-- *Source:* who.int — openly available as a full-color illustrated manual
-- *Content:* The global gold standard for under-5 child health triage at the primary care level. The IMCI "danger signs" classification system (General Danger Signs → immediate referral) is the clinical backbone of the triage agent's rule set.
-- *Format:* PDF (available in 6 UN languages)
-- *RAG use:* The IMCI "assess and classify" flowcharts are the most important content — chunks containing "classify as" and "treat as" keywords are retrieved most frequently by the Differential Diagnosis Agent.
-- *Critical note:* The WHO IMCI pocket book (2013 edition, updated 2024) is freely downloadable and is 380 pages of high-density clinical information. This single document is worth more than any other in the corpus.
+
+- _Source:_ who.int — openly available as a full-color illustrated manual
+- _Content:_ The global gold standard for under-5 child health triage at the primary care level. The IMCI "danger signs" classification system (General Danger Signs → immediate referral) is the clinical backbone of the triage agent's rule set.
+- _Format:_ PDF (available in 6 UN languages)
+- _RAG use:_ The IMCI "assess and classify" flowcharts are the most important content — chunks containing "classify as" and "treat as" keywords are retrieved most frequently by the Differential Diagnosis Agent.
+- _Critical note:_ The WHO IMCI pocket book (2013 edition, updated 2024) is freely downloadable and is 380 pages of high-density clinical information. This single document is worth more than any other in the corpus.
 
 **Document 4: National List of Essential Medicines India (NLEM)**
-- *Source:* mohfw.gov.in (2022 edition)
-- *Content:* 384 medicines available at various levels of the health system, with formulations, dosage forms, and indications. Organized by therapeutic category.
-- *Format:* PDF + Excel
-- *RAG use:* The referral agent queries this to confirm: "Is the recommended drug available at PHC level?" If not, it adjusts the recommendation or flags the supply gap. Also used by the drug dosage lookup component.
+
+- _Source:_ mohfw.gov.in (2022 edition)
+- _Content:_ 384 medicines available at various levels of the health system, with formulations, dosage forms, and indications. Organized by therapeutic category.
+- _Format:_ PDF + Excel
+- _RAG use:_ The referral agent queries this to confirm: "Is the recommended drug available at PHC level?" If not, it adjusts the recommendation or flags the supply gap. Also used by the drug dosage lookup component.
 
 **Document 5: India NCAP-CH (National Action Plan on Climate Change & Human Health)**
-- *Source:* ncdc.mohfw.gov.in
-- *Content:* India's official health response to climate change. Covers climate-sensitive disease protocols (heat stroke, vector-borne disease, waterborne illness), early warning systems, and community health worker roles in climate-health response.
-- *Format:* PDF (2021 edition)
-- *RAG use:* Feeds the secondary SDG 13 component. When the ASHA's location or season flag suggests climate-linked disease risk (monsoon + diarrhea, heatwave + fever), the RAG retrieves from NCAP-CH to add a climate-health context to the advisory.
+
+- _Source:_ ncdc.mohfw.gov.in
+- _Content:_ India's official health response to climate change. Covers climate-sensitive disease protocols (heat stroke, vector-borne disease, waterborne illness), early warning systems, and community health worker roles in climate-health response.
+- _Format:_ PDF (2021 edition)
+- _RAG use:_ Feeds the secondary SDG 13 component. When the ASHA's location or season flag suggests climate-linked disease risk (monsoon + diarrhea, heatwave + fever), the RAG retrieves from NCAP-CH to add a climate-health context to the advisory.
 
 **Document 6: BIS IS:10500 / WHO Water Quality Guidelines**
-- *Source:* BIS summary publicly available; WHO GDWQ (2022 edition) at who.int
-- *Content:* Drinking water quality standards — permissible limits for turbidity, TDS, coliform, pH, chemical contaminants. WHO GDWQ adds health-risk context for contaminant exceedances.
-- *Format:* PDF
-- *RAG use:* When an ASHA reports "family uses well water" and child has diarrhea, the water-safety advisory retrieval queries this document. Output: "Well water turbidity above IS:10500 limit of 1 NTU is associated with elevated diarrheal risk; recommend boiling or chlorination."
+
+- _Source:_ BIS summary publicly available; WHO GDWQ (2022 edition) at who.int
+- _Content:_ Drinking water quality standards — permissible limits for turbidity, TDS, coliform, pH, chemical contaminants. WHO GDWQ adds health-risk context for contaminant exceedances.
+- _Format:_ PDF
+- _RAG use:_ When an ASHA reports "family uses well water" and child has diarrhea, the water-safety advisory retrieval queries this document. Output: "Well water turbidity above IS:10500 limit of 1 NTU is associated with elevated diarrheal risk; recommend boiling or chlorination."
 
 ### RAG Corpus Construction Pipeline
 
@@ -440,13 +473,14 @@ RAW PDFs (MoHFW, NHM, WHO, BIS)
         ↓ Text cleaning (remove headers, footers, page numbers, figure captions)
         ↓ Section-aware chunking (500–800 token chunks with 50-token overlap)
         ↓ Medical term normalization (disease name → ICD-10 code mapping)
-        ↓ Embedding generation (sentence-transformers: all-MiniLM-L6-v2 or BioLORD)
+        ↓ Embedding generation (ONNX Runtime: all-MiniLM-L6-v2)
         ↓ K-means clustering (EdgeRAG compression step)
         ↓ Centroid-indexed vector store (FAISS or ChromaDB, then exported to flat file)
         ↓ DEPLOYED ON RPi 4 AS LOCAL .faiss INDEX FILE
 ```
 
 **Estimated corpus stats:**
+
 - Total pages: ~500–700 across all documents
 - Cleaned text tokens: ~600,000–900,000
 - Chunks (at 600 tokens): ~1,000–1,500 chunks
@@ -464,6 +498,7 @@ Despite strong coverage, there are specific gaps where synthetic generation is n
 MIMIC-IV gives vital-sign distributions for ICU patients in the US. NFHS-5 gives prevalence but not detailed vital signs. For specific Indian primary care conditions (severe dengue, cerebral malaria, severe SAM with complications), the vital-sign distributions need to be synthesized from published Indian clinical studies.
 
 **Method:**
+
 1. Extract mean ± SD for HR, SpO2, temperature, and weight-for-age from published Indian journal papers (IJPM, Indian Pediatrics, Indian Journal of Medical Research — all open access).
 2. Generate N=1,000–5,000 synthetic patients per condition using multivariate Gaussian sampling with inter-feature correlations from MIMIC-IV.
 3. Calibrate: verify that generated distributions match published Indian clinical case series statistics.
@@ -482,14 +517,14 @@ No dataset captures an ASHA's actual clinical decision-making dialog. You genera
 
 ## Cross-Validation Summary: Feasibility Scorecard
 
-| Dataset | Coverage of Pipeline Need | Access Complexity | Data Quality | India Relevance |
-|---|---|---|---|---|
-| **MIMIC-IV** | Pre-training, vital-sign modeling, drug validation | Low (2-hr CITI + DUA, 1–3 days) | ⭐⭐⭐⭐⭐ (MIT-published, 10+ years) | Medium (US ICU → transfer required) |
-| **NFHS-5** | India fine-tuning, FL initialization, validation | Very Low (free DHS registration, same day) | ⭐⭐⭐⭐⭐ (govt survey, 636k households) | ⭐⭐⭐⭐⭐ (India-specific, district-level) |
-| **Health Gym** | Rare-condition augmentation, RL training | Zero (fully open, no approval) | ⭐⭐⭐⭐ (GAN-generated, identity risk 0.045%) | Medium (US-origin synthetic, augmentation role) |
-| **IHQID** | Language agent training, Indic NLU | Zero (ACL open access) | ⭐⭐⭐⭐ (ACL 2023 peer-reviewed) | ⭐⭐⭐⭐⭐ (India-specific, 7 Indic languages) |
-| **PhysioNet Wearables** | Sensor pipeline validation | Very Low (PhysioNet registration) | ⭐⭐⭐⭐ (annotated, validated devices) | Medium (wearable signal quality universally applicable) |
-| **RAG Corpus (PDFs)** | Knowledge base, retrieval quality | Zero (all public PDFs) | ⭐⭐⭐⭐⭐ (WHO/MoHFW authoritative) | ⭐⭐⭐⭐⭐ (India-specific clinical guidelines) |
+| Dataset                 | Coverage of Pipeline Need                          | Access Complexity                          | Data Quality                                   | India Relevance                                         |
+| ----------------------- | -------------------------------------------------- | ------------------------------------------ | ---------------------------------------------- | ------------------------------------------------------- |
+| **MIMIC-IV**            | Pre-training, vital-sign modeling, drug validation | Low (2-hr CITI + DUA, 1–3 days)            | ⭐⭐⭐⭐⭐ (MIT-published, 10+ years)          | Medium (US ICU → transfer required)                     |
+| **NFHS-5**              | India fine-tuning, FL initialization, validation   | Very Low (free DHS registration, same day) | ⭐⭐⭐⭐⭐ (govt survey, 636k households)      | ⭐⭐⭐⭐⭐ (India-specific, district-level)             |
+| **Health Gym**          | Rare-condition augmentation, RL training           | Zero (fully open, no approval)             | ⭐⭐⭐⭐ (GAN-generated, identity risk 0.045%) | Medium (US-origin synthetic, augmentation role)         |
+| **IHQID**               | Language agent training, Indic NLU                 | Zero (ACL open access)                     | ⭐⭐⭐⭐ (ACL 2023 peer-reviewed)              | ⭐⭐⭐⭐⭐ (India-specific, 7 Indic languages)          |
+| **PhysioNet Wearables** | Sensor pipeline validation                         | Very Low (PhysioNet registration)          | ⭐⭐⭐⭐ (annotated, validated devices)        | Medium (wearable signal quality universally applicable) |
+| **RAG Corpus (PDFs)**   | Knowledge base, retrieval quality                  | Zero (all public PDFs)                     | ⭐⭐⭐⭐⭐ (WHO/MoHFW authoritative)           | ⭐⭐⭐⭐⭐ (India-specific clinical guidelines)         |
 
 ---
 

@@ -74,6 +74,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.routes import health, sync, telemetry, triage
+from backend.api.middleware.rate_limiter import RateLimiterMiddleware
 from backend.db.session import init_db
 
 logger = logging.getLogger(__name__)
@@ -233,6 +234,7 @@ def create_app() -> FastAPI:
 		allow_headers=["*"],
 	)
 
+	app.add_middleware(RateLimiterMiddleware)
 	app.include_router(health.router, prefix="/api/v1/health", tags=["health"])
 	app.include_router(sync.router, prefix="/api/v1/sync", tags=["sync"])
 	app.include_router(telemetry.router, prefix="/api/v1/telemetry", tags=["telemetry"])

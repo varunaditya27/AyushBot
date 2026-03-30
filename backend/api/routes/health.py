@@ -46,3 +46,41 @@
 #       - ayushbot_system_memory_percent (gauge)
 #       - ayushbot_system_temperature_celsius (gauge)
 # =============================================================================
+
+from __future__ import annotations
+
+import time
+from typing import Dict
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from backend.db.session import get_db
+from backend.security.auth import AuthUser, Role, require_roles
+
+router = APIRouter()
+
+_START_TIME = time.time()
+
+
+@router.get("/ping")
+async def ping() -> Dict[str, str]:
+	return {"status": "ok"}
+
+
+@router.get("/ready")
+async def ready(db: Session = Depends(get_db)) -> Dict[str, str]:
+	try:
+		db.execute(text("SELECT 1"))
+	except Exception as exc:
+		raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+	return {"status": "ready"}
+
+
+@router.get("/status")
+async def status_report(
+	_user: AuthUser = Depends(require_roles([Role.MEDICAL_OFFICER])),
+) -> Dict[str, str]:
+	uptime = int(time.time() - _START_TIME)
+	return {"status": "ok", "uptime_seconds": str(uptime)}
