@@ -73,3 +73,45 @@
 #   - input_state_hash, output_state_hash (for state diff tracking)
 #   - error (if any), fallback_used (bool)
 # =============================================================================
+
+from __future__ import annotations
+
+import logging
+from typing import Callable
+
+from langgraph.graph import END, StateGraph
+
+from backend.agents.agent_diagnosis import run_diagnosis
+from backend.agents.agent_intake import run_intake
+from backend.agents.agent_language import postprocess_output, preprocess_input
+from backend.agents.agent_referral import run_referral
+from backend.agents.state import PatientState
+
+logger = logging.getLogger(__name__)
+
+
+def _is_critical(state: PatientState) -> str:
+	return "referral" if state.get("risk_level") == "CRITICAL" else "diagnosis"
+
+
+def build_graph() -> StateGraph:
+	graph = StateGraph(PatientState)
+	graph.add_node("language_in", preprocess_input)
+	graph.add_node("intake", run_intake)
+	graph.add_node("diagnosis", run_diagnosis)
+	graph.add_node("referral", run_referral)
+	graph.add_node("language_out", postprocess_output)
+
+	graph.set_entry_point("language_in")
+	graph.add_edge("language_in", "intake")
+	graph.add_conditional_edges("intake", _is_critical)
+	graph.add_edge("diagnosis", "referral")
+	graph.add_edge("referral", "language_out")
+	graph.add_edge("language_out", END)
+	return graph
+
+
+def run_pipeline(state: PatientState) -> PatientState:
+	graph = build_graph().compile()
+	result = graph.invoke(state)
+	return result

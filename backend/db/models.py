@@ -1,93 +1,95 @@
-# =============================================================================
-# AyushBot Backend — Database Models (SQLAlchemy ORM)
-# =============================================================================
-#
-# PURPOSE:
-#   Defines the SQLAlchemy ORM models that represent all persistent data
-#   tables on the PHC gateway's local SQLite database.
-#
-# TABLES:
-#
-#   patients
-#     Stores patient demographic records.
-#     - id: UUID primary key
-#     - abha_id: Optional ABHA (Ayushman Bharat Health Account) identifier
-#     - name: Encrypted patient name (ASCON-128 or AES-256 at rest)
-#     - age_months: Integer
-#     - sex: Enum (MALE, FEMALE, OTHER)
-#     - village_id: Foreign key to villages table
-#     - created_at: Timestamp
-#     - updated_at: Timestamp
-#     NOTE: Patient names and identifiers are encrypted at rest using the
-#     gateway's device key. Only the gateway process can decrypt them.
-#
-#   encounters
-#     Stores individual triage encounters (one per ASHA visit per patient).
-#     - id: UUID primary key
-#     - patient_id: Foreign key to patients
-#     - asha_id: String (ASHA worker identifier)
-#     - timestamp: When the encounter occurred
-#     - raw_vitals: JSON blob of sensor readings
-#     - validated_vitals: JSON blob of quality-checked vitals
-#     - risk_level: Enum (LOW, MEDIUM, HIGH, CRITICAL)
-#     - risk_confidence: Float
-#     - differential_diagnosis: JSON blob (Agent 2 output)
-#     - action_plan: JSON blob (Agent 3 output)
-#     - asha_input_text: Original ASHA input (local language)
-#     - translated_symptoms: Standardized English symptoms
-#     - pipeline_duration_ms: Total agent pipeline execution time
-#     - agent_timings: JSON blob of per-agent durations
-#     - created_at: Timestamp
-#
-#   outcomes
-#     Stores feedback from the PHC Medical Officer (ground truth labels).
-#     - id: UUID primary key
-#     - encounter_id: Foreign key to encounters
-#     - confirmed_diagnosis: String (doctor's confirmed diagnosis)
-#     - doctor_notes: Text (optional clinical notes)
-#     - outcome_date: Timestamp
-#     - used_for_fl: Boolean (whether this label has been used in FL training)
-#
-#   fl_training_log
-#     Stores records of local FL training rounds.
-#     - id: UUID primary key
-#     - round_number: Integer (monotonically increasing)
-#     - started_at: Timestamp
-#     - completed_at: Timestamp
-#     - samples_used: Integer
-#     - epochs: Integer
-#     - loss_history: JSON array of per-epoch loss values
-#     - dp_epsilon_spent: Float (privacy budget consumed in this round)
-#     - cumulative_epsilon: Float (total privacy budget consumed to date)
-#     - gradient_size_bytes: Integer
-#     - sync_status: Enum (PENDING, UPLOADED, FAILED)
-#     - synced_at: Optional Timestamp
-#
-#   villages
-#     Static reference data for geographic routing.
-#     - id: String primary key (village code)
-#     - name: String
-#     - district: String
-#     - nearest_phc: String (facility code)
-#     - gps_lat: Float
-#     - gps_lng: Float
-#
-#   facilities
-#     Static reference data for referral destinations.
-#     - id: String primary key (facility code)
-#     - name: String
-#     - facility_type: Enum (PHC, CHC, DH)
-#     - address: String
-#     - phone: Optional String
-#     - gps_lat: Float
-#     - gps_lng: Float
-#
-# INDEXING:
-#   - encounters: index on (patient_id, timestamp) for history queries
-#   - encounters: index on (asha_id, timestamp) for per-ASHA queries
-#   - fl_training_log: index on (sync_status) for pending upload queries
-#
-# DATA RETENTION:
-#   Data is retained locally for 2 years per DPDPA 2023 requirements, then
-#   archived (encrypted export to SD card) and purged from the active database.
-# =============================================================================
+"""AyushBot Backend — Database Models (SQLAlchemy ORM).
+
+Defines the SQLite schema for offline-first syncing with Android devices.
+Models mirror `/android/app/src/main/java/com/ayushbot/app/data/local/entity/`.
+"""
+
+from __future__ import annotations
+
+import time
+from typing import List, Optional
+
+from sqlalchemy import Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+def _now_ms() -> int:
+	return int(time.time() * 1000)
+
+
+class Base(DeclarativeBase):
+	pass
+
+
+class Patient(Base):
+	__tablename__ = "patients"
+
+	id: Mapped[str] = mapped_column(String(64), primary_key=True)
+	abha_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+	name: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+	age_months: Mapped[int] = mapped_column(Integer, nullable=False)
+	sex: Mapped[str] = mapped_column(String(16), nullable=False)
+	village: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+	asha_id: Mapped[str] = mapped_column(String(64), nullable=False)
+	created_at: Mapped[int] = mapped_column(Integer, default=_now_ms, nullable=False)
+
+	cases: Mapped[List["Case"]] = relationship(
+		back_populates="patient",
+		cascade="all, delete-orphan",
+		passive_deletes=True,
+	)
+
+
+class Case(Base):
+	__tablename__ = "cases"
+
+	id: Mapped[str] = mapped_column(String(64), primary_key=True)
+	patient_id: Mapped[str] = mapped_column(
+		String(64), ForeignKey("patients.id", ondelete="CASCADE"), nullable=False
+	)
+	timestamp: Mapped[int] = mapped_column(Integer, default=_now_ms, nullable=False)
+	spo2: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+	heart_rate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+	temperature: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+	weight: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+	symptoms: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+	risk_tier: Mapped[str] = mapped_column(String(16), default="LOW", nullable=False)
+	sync_status: Mapped[str] = mapped_column(
+		String(16), default="PENDING", nullable=False
+	)
+
+	patient: Mapped["Patient"] = relationship(back_populates="cases")
+	recommendation: Mapped[Optional["Recommendation"]] = relationship(
+		back_populates="case",
+		cascade="all, delete-orphan",
+		passive_deletes=True,
+		uselist=False,
+	)
+
+	__table_args__ = (
+		Index("ix_cases_patient_timestamp", "patient_id", "timestamp"),
+		Index("ix_cases_sync_status", "sync_status"),
+	)
+
+
+class Recommendation(Base):
+	__tablename__ = "recommendations"
+
+	id: Mapped[str] = mapped_column(String(64), primary_key=True)
+	case_id: Mapped[str] = mapped_column(
+		String(64), ForeignKey("cases.id", ondelete="CASCADE"), nullable=False, unique=True
+	)
+	primary_diagnosis: Mapped[str] = mapped_column(String(256), nullable=False)
+	confidence: Mapped[str] = mapped_column(String(16), default="Low", nullable=False)
+	differential_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+	action_plan: Mapped[str] = mapped_column(Text, default="", nullable=False)
+	referral_facility: Mapped[Optional[str]] = mapped_column(
+		String(128), nullable=True
+	)
+	drug_dosage: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+	counseling: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+	citation_source: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+	citation_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+	created_at: Mapped[int] = mapped_column(Integer, default=_now_ms, nullable=False)
+
+	case: Mapped["Case"] = relationship(back_populates="recommendation")

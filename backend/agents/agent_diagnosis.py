@@ -72,3 +72,124 @@
 #
 # LATENCY TARGET: 200-400 ms (retrieval ~100 ms + reranking ~50 ms + LLM ~200 ms)
 # =============================================================================
+
+from __future__ import annotations
+
+import json
+import logging
+import time
+from functools import lru_cache
+from typing import Any, Dict, List
+
+from backend.agents.schemas.differential import (
+	Citation,
+	DiagnosisEntry,
+	DifferentialDiagnosis,
+	RetrievalMetrics,
+)
+from backend.agents.state import PatientState
+from backend.llm.engine import LlamaEngine, create_engine
+from backend.rag.retriever import create_retriever
+
+logger = logging.getLogger(__name__)
+
+
+@lru_cache(maxsize=1)
+def _get_retriever():
+	return create_retriever()
+
+
+@lru_cache(maxsize=1)
+def _get_engine() -> LlamaEngine:
+	return create_engine()
+
+
+def _build_query(state: PatientState) -> str:
+	symptoms = ", ".join(state.get("translated_symptoms") or [])
+	vitals = state.get("validated_vitals", {})
+	parts = []
+	if symptoms:
+		parts.append(f"Symptoms: {symptoms}")
+	if vitals:
+		parts.append(
+			"Vitals: "
+			+ ", ".join(
+				f"{key}={value}" for key, value in vitals.items() if value is not None
+			)
+		)
+	risk = state.get("risk_level")
+	if risk:
+		parts.append(f"Risk: {risk}")
+	return "; ".join(parts) or "clinical assessment"
+
+
+def _fallback_diagnosis() -> DifferentialDiagnosis:
+	entry = DiagnosisEntry(
+		rank=1,
+		condition_name="Unknown presentation",
+		icd_code=None,
+		confidence=0.0,
+		evidence_summary="No matching protocol found in available evidence.",
+		citations=[
+			Citation(
+				source_document="N/A",
+				page_number=None,
+				section=None,
+				chunk_id="none",
+				relevance_score=0.0,
+			)
+		],
+		matching_symptoms=[],
+		differentiating_factors=[],
+	)
+	return DifferentialDiagnosis(
+		diagnoses=[entry],
+		evidence_chunks_used=0,
+		model_confidence=0.0,
+	)
+
+
+def run_diagnosis(state: PatientState) -> PatientState:
+	start = time.perf_counter()
+	query = _build_query(state)
+	try:
+		retriever = _get_retriever()
+		retrieval_start = time.perf_counter()
+		retrieval = retriever.query(query)
+		retrieval_ms = (time.perf_counter() - retrieval_start) * 1000
+		state["retrieved_chunks"] = retrieval.get("results", [])
+
+		if retrieval.get("guardrail_triggered") or not retrieval.get("results"):
+			diagnosis = _fallback_diagnosis()
+		else:
+			engine = _get_engine()
+			evidence = retrieval["results"]
+			prompt = {
+				"query": query,
+				"evidence": evidence,
+			}
+			llm_start = time.perf_counter()
+			output = engine.generate_json(
+				json.dumps(prompt, ensure_ascii=False),
+				DifferentialDiagnosis,
+				max_tokens=300,
+			)
+			llm_ms = (time.perf_counter() - llm_start) * 1000
+			diagnosis = DifferentialDiagnosis.model_validate_json(output)
+			diagnosis.evidence_chunks_used = len(evidence)
+			diagnosis.retrieval_metrics = RetrievalMetrics(
+				dense_retrieval_ms=retrieval_ms,
+				llm_synthesis_ms=llm_ms,
+				total_ms=(time.perf_counter() - start) * 1000,
+			)
+
+		state["differential_diagnosis"] = diagnosis.model_dump()
+		state["retrieval_metrics"] = diagnosis.retrieval_metrics.model_dump()
+	except Exception as exc:
+		logger.error("Diagnosis agent failed: %s", exc)
+		state.setdefault("errors", []).append(str(exc))
+		fallback = _fallback_diagnosis()
+		state["differential_diagnosis"] = fallback.model_dump()
+		state["retrieval_metrics"] = fallback.retrieval_metrics.model_dump()
+
+	return state

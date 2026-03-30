@@ -49,3 +49,131 @@
 #   previous gateway sync, the NEWER timestamp wins. Conflicts are logged
 #   for manual review by the Medical Officer.
 # =============================================================================
+
+from __future__ import annotations
+
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from backend.db import crud
+from backend.db.session import get_db
+from backend.security.auth import AuthUser, Role, require_roles
+
+router = APIRouter()
+
+
+class PatientPayload(BaseModel):
+	id: str
+	abha_id: Optional[str] = None
+	name: Optional[str] = None
+	age_months: int
+	sex: str
+	village: Optional[str] = None
+	asha_id: str
+	created_at: Optional[int] = None
+
+
+class CasePayload(BaseModel):
+	id: str
+	patient_id: str
+	timestamp: Optional[int] = None
+	spo2: Optional[float] = None
+	heart_rate: Optional[float] = None
+	temperature: Optional[float] = None
+	weight: Optional[float] = None
+	symptoms: str = "[]"
+	risk_tier: str = "LOW"
+	sync_status: str = "PENDING"
+
+
+class RecommendationPayload(BaseModel):
+	id: str
+	case_id: str
+	primary_diagnosis: str
+	confidence: str = "Low"
+	differential_json: str = "[]"
+	action_plan: str = ""
+	referral_facility: Optional[str] = None
+	drug_dosage: Optional[str] = None
+	counseling: Optional[str] = None
+	citation_source: Optional[str] = None
+	citation_text: Optional[str] = None
+	created_at: Optional[int] = None
+
+
+class SyncRecord(BaseModel):
+	patient: PatientPayload
+	case: CasePayload
+	recommendation: Optional[RecommendationPayload] = None
+
+
+class SyncBatchRequest(BaseModel):
+	records: List[SyncRecord] = Field(default_factory=list)
+
+
+class SyncBatchResponse(BaseModel):
+	accepted: int
+	rejected: List[dict]
+
+
+def _merge_updates(payload: BaseModel) -> dict:
+	return payload.model_dump(exclude_none=True)
+
+
+@router.post("", response_model=SyncBatchResponse, status_code=status.HTTP_200_OK)
+async def sync_batch(
+	batch: SyncBatchRequest,
+	db: Session = Depends(get_db),
+	_user: AuthUser = Depends(require_roles([Role.ASHA_WORKER, Role.MEDICAL_OFFICER])),
+):
+	if not batch.records:
+		raise HTTPException(
+			status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+			detail="No records provided",
+		)
+
+	accepted = 0
+	rejected: List[dict] = []
+
+	for record in batch.records:
+		try:
+			with db.begin_nested():
+				patient_payload = record.patient
+				case_payload = record.case
+				rec_payload = record.recommendation
+
+				patient = crud.get_patient(db, patient_payload.id)
+				if patient:
+					crud.update_patient(db, patient.id, _merge_updates(patient_payload))
+				else:
+					crud.create_patient(db, _merge_updates(patient_payload))
+
+				case = crud.get_case(db, case_payload.id)
+				if case:
+					crud.update_case(db, case.id, _merge_updates(case_payload))
+				else:
+					crud.create_case(db, _merge_updates(case_payload))
+
+				if rec_payload:
+					existing = crud.get_recommendation_by_case(db, rec_payload.case_id)
+					if existing:
+						crud.update_recommendation(
+							db, existing.id, _merge_updates(rec_payload)
+						)
+					else:
+						crud.create_recommendation(db, _merge_updates(rec_payload))
+
+			accepted += 1
+		except Exception as exc:
+			rejected.append(
+				{
+					"patient_id": record.patient.id,
+					"case_id": record.case.id,
+					"reason": str(exc),
+				}
+			)
+
+	return SyncBatchResponse(accepted=accepted, rejected=rejected)

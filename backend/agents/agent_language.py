@@ -95,3 +95,28 @@
 #
 # LATENCY TARGET: 100-200 ms per phase (total ~300 ms for both activations)
 # =============================================================================
+
+from __future__ import annotations
+
+from typing import Any, Dict, List
+
+from backend.agents.state import PatientState
+
+
+def preprocess_input(state: PatientState) -> PatientState:
+	symptom_text = state.get("asha_input_text") or ""
+	translated = [symptom_text] if symptom_text else []
+	state["translated_symptoms"] = translated
+	state["intent"] = "SYMPTOM_REPORT"
+	state["extracted_entities"] = []
+	return state
+
+
+def postprocess_output(state: PatientState) -> PatientState:
+	action_plan = state.get("action_plan") or {}
+	summary = action_plan.get("primary_diagnosis") or ""
+	if action_plan.get("immediate_actions"):
+		summary = summary or "; ".join(action_plan.get("immediate_actions"))
+	state["asha_output_text"] = summary or "Refer to medical officer"
+	state["asha_output_audio"] = None
+	return state

@@ -13,6 +13,7 @@
 # uvicorn[standard]        # ASGI server with HTTP/2 and WebSocket support
 # pydantic>=2.0            # Data validation and serialization
 # python-multipart         # File upload support for sync endpoints
+# langgraph                # Agent orchestration state machine
 #
 # --- Database ---
 # sqlalchemy>=2.0          # ORM for SQLite
@@ -20,7 +21,6 @@
 # aiosqlite                # Async SQLite driver for FastAPI
 #
 # --- RAG Pipeline ---
-# sentence-transformers    # Bi-encoder (all-MiniLM-L6-v2) and cross-encoder
 # faiss-cpu                # Facebook HNSW vector index (CPU version for RPi 4)
 # rank-bm25                # Sparse BM25 retrieval
 # pymupdf                  # PDF text extraction for corpus ingestion
@@ -31,7 +31,6 @@
 #
 # --- Federated Learning ---
 # flwr                     # Flower FL framework (client + common)
-# opacus                   # PyTorch differential privacy (for DP mechanism)
 #
 # --- ML / Numerical ---
 # numpy                    # Array operations
@@ -41,9 +40,7 @@
 # onnxruntime              # Optional: ONNX model inference
 #
 # --- Language Agent ---
-# transformers             # Hugging Face Transformers (IndicBERT, IndicTrans2)
 # tokenizers               # Fast tokenization
-# torchaudio               # TTS audio processing
 #
 # --- Utilities ---
 # pyyaml                   # YAML config file parsing
@@ -52,6 +49,10 @@
 # structlog                # Structured JSON logging
 # cryptography             # TLS certificate handling
 # zeroconf                 # mDNS service discovery for local network
+# pyjwt                    # ECDSA-backed JWT authentication
+# argon2-cffi              # Argon2 password hashing
+# paho-mqtt                # MQTT client for telemetry ingestion
+# redis                    # Redis client for telemetry queue
 #
 # --- Development Only (not installed in production Docker image) ---
 # pytest                   # Testing framework
@@ -61,3 +62,14 @@
 # black                    # Code formatting
 # mypy                     # Type checking
 # =============================================================================
+
+# --- Runtime Dependencies (minimal for Phase 2) ---
+fastapi
+uvicorn[standard]
+pydantic>=2.0
+sqlalchemy>=2.0
+pyyaml
+pyjwt
+argon2-cffi
+paho-mqtt
+redis

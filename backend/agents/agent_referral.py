@@ -86,3 +86,215 @@
 #
 # LATENCY TARGET: < 100 ms (routing ~50 ms + dosage ~10 ms + assembly ~10 ms)
 # =============================================================================
+
+from __future__ import annotations
+
+import json
+import logging
+import math
+import os
+import sqlite3
+from typing import Any, Dict, List, Optional, Tuple
+
+import yaml
+
+from backend.agents.schemas.action_plan import ActionPlan, FollowUp, ReferralDetails
+from backend.agents.state import PatientState
+
+logger = logging.getLogger(__name__)
+
+
+def _load_config() -> Dict[str, Any]:
+	config_path = os.getenv("AYUSHBOT_CONFIG") or os.path.join(
+		os.path.dirname(__file__), "..", "config.yaml"
+	)
+	if not os.path.exists(config_path):
+		return {}
+	try:
+		with open(config_path, "r", encoding="utf-8") as handle:
+			return yaml.safe_load(handle) or {}
+	except Exception as exc:  # pragma: no cover
+		logger.error("Failed to load config: %s", exc)
+		return {}
+
+
+def _db_path(config: Dict[str, Any]) -> str:
+	db_cfg = config.get("database", {}) if isinstance(config, dict) else {}
+	return os.getenv("AYUSHBOT_DB_PATH", db_cfg.get("path", "/opt/ayushbot/data/ayushbot.db"))
+
+
+def _haversine(a: Tuple[float, float], b: Tuple[float, float]) -> float:
+	lat1, lon1 = a
+	lat2, lon2 = b
+	radius = 6371.0
+	dlat = math.radians(lat2 - lat1)
+	dlon = math.radians(lon2 - lon1)
+	hav = (
+		math.sin(dlat / 2) ** 2
+		+ math.cos(math.radians(lat1))
+		* math.cos(math.radians(lat2))
+		* math.sin(dlon / 2) ** 2
+	)
+	return 2 * radius * math.asin(math.sqrt(hav))
+
+
+def _facility_tier(risk_level: str | None) -> str:
+	if risk_level == "CRITICAL":
+		return "DH"
+	if risk_level == "HIGH":
+		return "CHC"
+	if risk_level == "MEDIUM":
+		return "PHC"
+	return "HOME_MANAGEMENT"
+
+
+def _load_facilities(db_path: str) -> List[Dict[str, Any]]:
+	if not os.path.exists(db_path):
+		raise FileNotFoundError(f"Database not found at {db_path}")
+	conn = sqlite3.connect(db_path)
+	conn.row_factory = sqlite3.Row
+	try:
+		cursor = conn.execute(
+			"SELECT id, name, type, latitude, longitude, address, phone FROM facilities"
+		)
+		return [dict(row) for row in cursor.fetchall()]
+	finally:
+		conn.close()
+
+
+def _load_graph(config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+	graph_path = os.getenv("AYUSHBOT_ROAD_GRAPH", config.get("road_graph_path", ""))
+	if not graph_path or not os.path.exists(graph_path):
+		return None
+	with open(graph_path, "r", encoding="utf-8") as handle:
+		return json.load(handle)
+
+
+def _dijkstra(graph: Dict[str, Any], start: str, targets: List[str]) -> Tuple[str, float, List[str]]:
+	edges = graph.get("edges", {})
+	distances: Dict[str, float] = {start: 0.0}
+	previous: Dict[str, Optional[str]] = {start: None}
+	visited: set[str] = set()
+
+	while True:
+		candidates = {node: dist for node, dist in distances.items() if node not in visited}
+		if not candidates:
+			break
+		current = min(candidates, key=candidates.get)
+		if current in targets:
+			break
+		visited.add(current)
+		for neighbor, weight in edges.get(current, {}).items():
+			new_dist = distances[current] + float(weight)
+			if neighbor not in distances or new_dist < distances[neighbor]:
+				distances[neighbor] = new_dist
+				previous[neighbor] = current
+
+	reachable_targets = [t for t in targets if t in distances]
+	if not reachable_targets:
+		return "", float("inf"), []
+	best = min(reachable_targets, key=lambda t: distances[t])
+	path = []
+	node = best
+	while node:
+		path.append(node)
+		node = previous.get(node)
+	return best, distances[best], list(reversed(path))
+
+
+def _pick_nearest(facilities: List[Dict[str, Any]], location: Tuple[float, float]) -> Dict[str, Any]:
+	return min(facilities, key=lambda f: _haversine(location, (f["latitude"], f["longitude"])))
+
+
+def run_referral(state: PatientState) -> PatientState:
+	config = _load_config()
+	db_path = _db_path(config)
+	risk_level = state.get("risk_level")
+	required_tier = _facility_tier(risk_level)
+
+	if required_tier == "HOME_MANAGEMENT":
+		plan = ActionPlan(
+			urgency="ROUTINE",
+			referral=None,
+			medications=[],
+			immediate_actions=["Provide home care guidance"],
+			follow_up=FollowUp(follow_up_date="After 48 hours"),
+			referral_slip=None,
+			primary_diagnosis=state.get("differential_diagnosis", {}).get("diagnoses", [{}])[0].get(
+				"condition_name", ""
+			),
+			source_guideline="",
+		)
+		state["action_plan"] = plan.model_dump()
+		return state
+
+	try:
+		facilities = _load_facilities(db_path)
+	except Exception as exc:
+		state.setdefault("errors", []).append(str(exc))
+		facilities = []
+
+	facilities = [f for f in facilities if f.get("type") == required_tier] or facilities
+
+	location = state.get("location")
+	if not location:
+		location = (0.0, 0.0)
+
+	destination: Optional[Dict[str, Any]] = None
+	route = []
+	distance_km = 0.0
+	graph = _load_graph(config)
+	if graph and facilities and isinstance(location, (list, tuple)):
+		nodes = graph.get("nodes", {})
+		start_node = nodes.get(state.get("village_id")) or graph.get("default_start")
+		target_nodes = [nodes.get(f["id"]) for f in facilities if nodes.get(f["id"]) is not None]
+		target_nodes = [t for t in target_nodes if t]
+		if start_node and target_nodes:
+			best, distance_km, route = _dijkstra(graph, start_node, target_nodes)
+			destination = next((f for f in facilities if nodes.get(f["id"]) == best), None)
+
+	if not destination and facilities:
+		if isinstance(location, (list, tuple)) and len(location) == 2:
+			destination = _pick_nearest(facilities, (float(location[0]), float(location[1])))
+			distance_km = _haversine(
+				(float(location[0]), float(location[1])),
+				(destination["latitude"], destination["longitude"]),
+			)
+		else:
+			destination = facilities[0]
+
+	if not destination:
+		state.setdefault("errors", []).append("No facilities available")
+		return state
+
+	referral = ReferralDetails(
+		facility_name=destination.get("name", "Unknown"),
+		facility_type=destination.get("type", required_tier),
+		address=destination.get("address", ""),
+		distance_km=float(distance_km),
+		travel_time_minutes=int(distance_km * 4),
+		route_description=" -> ".join(route) if route else "",
+		phone_number=destination.get("phone"),
+		facility_coordinates=(destination.get("latitude"), destination.get("longitude")),
+	)
+
+	plan = ActionPlan(
+		urgency="IMMEDIATE" if risk_level == "CRITICAL" else "WITHIN_24H",
+		referral=referral,
+		medications=[],
+		immediate_actions=["Refer to higher facility"],
+		follow_up=FollowUp(follow_up_date="After referral"),
+		referral_slip=None,
+		primary_diagnosis=state.get("differential_diagnosis", {}).get("diagnoses", [{}])[0].get(
+			"condition_name", ""
+		),
+		source_guideline="",
+	)
+
+	state["action_plan"] = plan.model_dump()
+	state["routing_result"] = {
+		"facility": destination,
+		"distance_km": distance_km,
+		"route": route,
+	}
+	return state
