@@ -58,3 +58,69 @@
 #   - Very short sections: Merged with the next section to avoid tiny chunks
 #     that would be semantically weak
 # =============================================================================
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from typing import Iterable, List
+
+
+@dataclass
+class Chunk:
+	text: str
+	index: int
+	token_count: int
+
+
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+
+
+def _tokenize(text: str) -> List[str]:
+	return [tok for tok in re.split(r"\s+", text.strip()) if tok]
+
+
+def chunk_text(
+	text: str,
+	max_tokens: int = 300,
+	overlap: int = 50,
+	min_tokens: int = 30,
+) -> List[Chunk]:
+	sentences = [s.strip() for s in _SENTENCE_SPLIT.split(text) if s.strip()]
+	chunks: List[Chunk] = []
+	buffer: List[str] = []
+	token_count = 0
+	idx = 0
+
+	def flush() -> None:
+		nonlocal buffer, token_count, idx
+		if token_count >= min_tokens:
+			chunk_text_value = " ".join(buffer).strip()
+			chunks.append(Chunk(text=chunk_text_value, index=idx, token_count=token_count))
+			idx += 1
+		if overlap > 0 and buffer:
+			tokens = _tokenize(" ".join(buffer))
+			buffer = tokens[-overlap:]
+			token_count = len(buffer)
+		else:
+			buffer = []
+			token_count = 0
+
+	for sentence in sentences:
+		tokens = _tokenize(sentence)
+		if token_count + len(tokens) > max_tokens and buffer:
+			flush()
+		buffer.extend(tokens)
+		token_count += len(tokens)
+
+	if buffer:
+		flush()
+
+	return chunks
+
+
+def chunk_documents(docs: Iterable[str], **kwargs) -> List[Chunk]:
+	chunks: List[Chunk] = []
+	for doc in docs:
+		chunks.extend(chunk_text(doc, **kwargs))
+	return chunks

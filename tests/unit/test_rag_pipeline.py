@@ -61,3 +61,49 @@
 # FIXTURES USED:
 #   - mock_faiss_index (small pre-built test index)
 # =============================================================================
+
+import pytest
+
+pytest.importorskip("faiss")
+
+import numpy as np
+
+from backend.rag.pipeline.chunker import chunk_text
+from backend.rag.pipeline.indexer import build_faiss_index
+from backend.rag.pipeline.retriever import HybridRetriever
+
+
+class _DummyEmbedder:
+	def embed(self, text: str) -> np.ndarray:
+		if "fever" in text:
+			return np.array([1.0, 0.0, 0.0], dtype=np.float32)
+		if "cough" in text:
+			return np.array([0.0, 1.0, 0.0], dtype=np.float32)
+		return np.array([0.0, 0.0, 1.0], dtype=np.float32)
+
+
+def test_chunker_respects_max_tokens():
+	text = "Sentence. " * 200
+	chunks = chunk_text(text, max_tokens=50, overlap=10)
+	assert all(chunk.token_count <= 50 for chunk in chunks)
+
+
+def test_retriever_returns_top_k():
+	embeddings = np.array(
+		[
+			[1.0, 0.0, 0.0],
+			[0.0, 1.0, 0.0],
+			[0.0, 0.0, 1.0],
+		],
+		dtype=np.float32,
+	)
+	index = build_faiss_index(embeddings, use_hnsw=False)
+	metadata = [
+		{"text": "fever protocol"},
+		{"text": "cough protocol"},
+		{"text": "nutrition"},
+	]
+	retriever = HybridRetriever(index=index, metadata=metadata, embedder=_DummyEmbedder())
+	results = retriever.query("fever", top_k=2, dense_k=2, sparse_k=0)
+	assert len(results) == 2
+	assert results[0].text == "fever protocol"

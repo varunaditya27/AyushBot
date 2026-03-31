@@ -63,3 +63,89 @@
 #
 # LATENCY TARGET: < 50 ms for dense + sparse + fusion (on RPi 4)
 # =============================================================================
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
+
+import faiss
+import numpy as np
+from rank_bm25 import BM25Okapi
+
+
+@dataclass
+class RetrievedChunk:
+	text: str
+	metadata: Dict[str, Any]
+	dense_score: float
+	sparse_score: float
+	fused_score: float
+
+
+class HybridRetriever:
+	def __init__(
+		self,
+		index: faiss.Index,
+		metadata: List[Dict[str, Any]],
+		embedder,
+		bm25: Optional[BM25Okapi] = None,
+	) -> None:
+		self._index = index
+		self._metadata = metadata
+		self._embedder = embedder
+		self._bm25 = bm25
+
+	@classmethod
+	def from_files(cls, index_path: str, metadata_path: str, embedder) -> "HybridRetriever":
+		index = faiss.read_index(index_path)
+		with open(metadata_path, "r", encoding="utf-8") as handle:
+			metadata = json.load(handle)
+		texts = [item.get("text", "") for item in metadata]
+		bm25 = BM25Okapi([t.split() for t in texts]) if texts else None
+		return cls(index=index, metadata=metadata, embedder=embedder, bm25=bm25)
+
+	def _dense(self, query: str, top_k: int) -> List[Tuple[int, float]]:
+		vector = self._embedder.embed(query)
+		vector = np.expand_dims(vector, axis=0).astype(np.float32)
+		scores, indices = self._index.search(vector, top_k)
+		return [(int(idx), float(score)) for idx, score in zip(indices[0], scores[0])]
+
+	def _sparse(self, query: str, top_k: int) -> List[Tuple[int, float]]:
+		if not self._bm25:
+			return []
+		scores = self._bm25.get_scores(query.split())
+		ranked = np.argsort(scores)[::-1][:top_k]
+		return [(int(idx), float(scores[idx])) for idx in ranked]
+
+	def _rrf(self, dense: List[Tuple[int, float]], sparse: List[Tuple[int, float]], k: int = 60) -> Dict[int, float]:
+		scores: Dict[int, float] = {}
+		for rank, (idx, _) in enumerate(dense):
+			scores[idx] = scores.get(idx, 0.0) + 1.0 / (k + rank + 1)
+		for rank, (idx, _) in enumerate(sparse):
+			scores[idx] = scores.get(idx, 0.0) + 1.0 / (k + rank + 1)
+		return scores
+
+	def query(self, query: str, top_k: int = 20, dense_k: int = 100, sparse_k: int = 100) -> List[RetrievedChunk]:
+		dense = self._dense(query, dense_k)
+		sparse = self._sparse(query, sparse_k)
+		fused_scores = self._rrf(dense, sparse)
+		ranked = sorted(fused_scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
+		dense_map = {idx: score for idx, score in dense}
+		sparse_map = {idx: score for idx, score in sparse}
+		results: List[RetrievedChunk] = []
+		for idx, fused_score in ranked:
+			if idx < 0 or idx >= len(self._metadata):
+				continue
+			meta = self._metadata[idx]
+			results.append(
+				RetrievedChunk(
+					text=meta.get("text", ""),
+					metadata={k: v for k, v in meta.items() if k != "text"},
+					dense_score=dense_map.get(idx, 0.0),
+					sparse_score=sparse_map.get(idx, 0.0),
+					fused_score=float(fused_score),
+				)
+			)
+		return results

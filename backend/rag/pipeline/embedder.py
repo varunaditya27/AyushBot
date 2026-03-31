@@ -46,3 +46,39 @@
 #   - Offline: numpy.ndarray of shape (N, 384), dtype float32
 #   - Online: numpy.ndarray of shape (1, 384), dtype float32
 # =============================================================================
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Iterable, List
+
+import numpy as np
+
+from backend.rag.retriever import OnnxEmbedder
+
+
+@dataclass
+class EmbedderConfig:
+	model_dir: str
+	max_length: int = 256
+	intra_op_threads: int = 1
+	inter_op_threads: int = 1
+
+
+class TextEmbedder:
+	def __init__(self, config: EmbedderConfig) -> None:
+		self._embedder = OnnxEmbedder(
+			config.model_dir,
+			max_length=config.max_length,
+			intra_op_threads=config.intra_op_threads,
+			inter_op_threads=config.inter_op_threads,
+		)
+
+	def embed(self, text: str) -> np.ndarray:
+		return self._embedder.embed(text)
+
+	def embed_batch(self, texts: Iterable[str]) -> np.ndarray:
+		vectors: List[np.ndarray] = []
+		for text in texts:
+			vectors.append(self.embed(text))
+		return np.vstack(vectors) if vectors else np.empty((0, 0), dtype=np.float32)

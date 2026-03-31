@@ -45,3 +45,23 @@
 # FIXTURES USED:
 #   - sample_patient_state, mock_llm_client, mock_faiss_index
 # =============================================================================
+
+import pytest
+
+pytest.importorskip("llama_cpp")
+
+from backend.agents.agent_diagnosis import run_diagnosis
+
+
+class _StubRetriever:
+	def query(self, _text):
+		return {"results": [], "guardrail_triggered": True}
+
+
+def test_guardrail_fallback(sample_patient_state, monkeypatch):
+	from backend.agents import agent_diagnosis
+
+	monkeypatch.setattr(agent_diagnosis, "_get_retriever", lambda: _StubRetriever())
+	result = run_diagnosis(sample_patient_state)
+	diagnosis = result["differential_diagnosis"]
+	assert diagnosis["diagnoses"][0]["condition_name"] == "Unknown presentation"

@@ -63,3 +63,53 @@
 #
 # LATENCY TARGET: ~50-100 ms for 20 pairs (on RPi 4)
 # =============================================================================
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import List
+
+from backend.rag.pipeline.retriever import RetrievedChunk
+
+
+@dataclass
+class RankedChunk:
+	text: str
+	metadata: dict
+	dense_score: float
+	sparse_score: float
+	fused_score: float
+	rerank_score: float
+
+
+def _overlap_score(query: str, text: str) -> float:
+	query_tokens = set(query.lower().split())
+	text_tokens = set(text.lower().split())
+	if not query_tokens or not text_tokens:
+		return 0.0
+	return len(query_tokens & text_tokens) / len(query_tokens | text_tokens)
+
+
+def rerank(
+	query: str,
+	candidates: List[RetrievedChunk],
+	top_k: int = 5,
+	min_score: float = 0.3,
+) -> List[RankedChunk]:
+	ranked: List[RankedChunk] = []
+	for chunk in candidates:
+		score = _overlap_score(query, chunk.text)
+		if score < min_score:
+			continue
+		ranked.append(
+			RankedChunk(
+				text=chunk.text,
+				metadata=chunk.metadata,
+				dense_score=chunk.dense_score,
+				sparse_score=chunk.sparse_score,
+				fused_score=chunk.fused_score,
+				rerank_score=score,
+			)
+		)
+	ranked.sort(key=lambda x: x.rerank_score, reverse=True)
+	return ranked[:top_k]

@@ -48,3 +48,36 @@
 #   - chunk_metadata.json: Mapping from vector ID → chunk object
 #   - index_manifest.json: Build metadata (num_chunks, build_time, model_name)
 # =============================================================================
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any, Dict, List
+
+import faiss
+import numpy as np
+
+
+def build_faiss_index(embeddings: np.ndarray, use_hnsw: bool = False) -> faiss.Index:
+	if embeddings.size == 0:
+		raise ValueError("Embeddings array is empty")
+	dim = embeddings.shape[1]
+	if use_hnsw:
+		index = faiss.IndexHNSWFlat(dim, 32)
+	else:
+		index = faiss.IndexFlatIP(dim)
+	faiss.normalize_L2(embeddings)
+	index.add(embeddings.astype(np.float32))
+	return index
+
+
+def save_index(index: faiss.Index, index_path: str) -> None:
+	Path(index_path).parent.mkdir(parents=True, exist_ok=True)
+	faiss.write_index(index, index_path)
+
+
+def save_metadata(metadata: List[Dict[str, Any]], metadata_path: str) -> None:
+	Path(metadata_path).parent.mkdir(parents=True, exist_ok=True)
+	with open(metadata_path, "w", encoding="utf-8") as handle:
+		json.dump(metadata, handle, ensure_ascii=False, indent=2)

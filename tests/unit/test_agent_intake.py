@@ -46,3 +46,31 @@
 #   - sample_patient_state (from conftest.py)
 #   - mock_xgboost_model (to avoid loading real model in tests)
 # =============================================================================
+
+import pytest
+
+pytest.importorskip("xgboost")
+
+from backend.agents.agent_intake import run_intake
+
+
+def test_classify_critical_case(sample_patient_state):
+	sample_patient_state["raw_vitals"] = {
+		"spo2": 85,
+		"heart_rate": 180,
+		"temperature_celsius": 40.2,
+	}
+	result = run_intake(sample_patient_state)
+	assert result["risk_level"] == "CRITICAL"
+	assert result["risk_confidence"] >= 0.8
+
+
+def test_missing_spo2_handling(sample_patient_state):
+	sample_patient_state["raw_vitals"] = {
+		"spo2": None,
+		"heart_rate": 130,
+		"temperature_celsius": 37.5,
+	}
+	result = run_intake(sample_patient_state)
+	assert result["signal_quality"]["spo2"] == "INVALID"
+	assert result["risk_level"] in {"LOW", "MEDIUM", "HIGH"}
