@@ -18,7 +18,7 @@ def _now_ms() -> int:
 
 
 class Base(DeclarativeBase):
-	pass
+	__abstract__ = True
 
 
 class Patient(Base):

@@ -180,8 +180,8 @@ class MqttListener:
 		self._stop_event.set()
 		try:
 			self._client.disconnect()
-		except Exception:
-			pass
+		except Exception as exc:
+			logger.debug("MQTT disconnect failed: %s", exc)
 		if self._thread and self._thread.is_alive():
 			self._thread.join(timeout=5)
 
@@ -196,8 +196,8 @@ class MqttListener:
 		finally:
 			try:
 				self._client.loop_stop()
-			except Exception:
-				pass
+			except Exception as exc:
+				logger.debug("MQTT loop stop failed: %s", exc)
 
 	def _on_connect(self, client, _userdata, _flags, rc) -> None:  # type: ignore[no-untyped-def]
 		if rc != 0:
