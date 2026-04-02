@@ -50,6 +50,10 @@ import pytest
 
 pytest.importorskip("llama_cpp")
 
+import pytest
+
+pytest.importorskip("llama_cpp")
+
 from backend.agents.agent_diagnosis import run_diagnosis
 
 

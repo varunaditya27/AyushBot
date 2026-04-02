@@ -66,6 +66,11 @@ import pytest
 
 pytest.importorskip("faiss")
 
+import pytest
+
+pytest.importorskip("faiss")
+pytest.importorskip("rank_bm25")
+
 import numpy as np
 
 from backend.rag.pipeline.chunker import chunk_text

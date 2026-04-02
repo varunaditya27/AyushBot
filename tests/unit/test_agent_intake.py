@@ -51,6 +51,10 @@ import pytest
 
 pytest.importorskip("xgboost")
 
+import pytest
+
+pytest.importorskip("xgboost")
+
 from backend.agents.agent_intake import run_intake
 
 

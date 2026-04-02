@@ -57,3 +57,61 @@
 #   - Queued gradient update files ready for sync_client.py to upload
 #   - Queue status: count, oldest_timestamp, total_size_bytes
 # =============================================================================
+
+from __future__ import annotations
+
+import json
+import os
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, Optional, Tuple
+
+import numpy as np
+
+
+@dataclass
+class GradientUpdate:
+	path: str
+	metadata: Dict[str, object]
+	gradient: np.ndarray
+
+
+class GradientQueue:
+	def __init__(self, queue_dir: str, max_queue_size: int = 50) -> None:
+		self.queue_dir = Path(queue_dir)
+		self.queue_dir.mkdir(parents=True, exist_ok=True)
+		self.max_queue_size = max_queue_size
+
+	def _list_files(self) -> list[Path]:
+		return sorted(self.queue_dir.glob("*.npz"))
+
+	def size(self) -> int:
+		return len(self._list_files())
+
+	def enqueue(self, gradient: np.ndarray, metadata: Optional[Dict[str, object]] = None) -> str:
+		metadata = metadata or {}
+		metadata.setdefault("timestamp", int(time.time()))
+		filename = f"grad_{metadata['timestamp']}_{int(time.time() * 1000)}.npz"
+		path = self.queue_dir / filename
+		np.savez_compressed(path, gradient=gradient.astype(np.float32), metadata=json.dumps(metadata))
+		self._trim()
+		return str(path)
+
+	def dequeue(self) -> Optional[GradientUpdate]:
+		files = self._list_files()
+		if not files:
+			return None
+		path = files[0]
+		data = np.load(path, allow_pickle=False)
+		gradient = data["gradient"]
+		metadata = json.loads(str(data["metadata"]))
+		path.unlink(missing_ok=True)
+		return GradientUpdate(path=str(path), metadata=metadata, gradient=gradient)
+
+	def _trim(self) -> None:
+		files = self._list_files()
+		if len(files) <= self.max_queue_size:
+			return
+		for path in files[: len(files) - self.max_queue_size]:
+			path.unlink(missing_ok=True)
