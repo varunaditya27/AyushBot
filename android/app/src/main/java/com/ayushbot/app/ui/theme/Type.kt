@@ -2,6 +2,7 @@ package com.ayushbot.app.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -157,3 +158,20 @@ val AyushBotTypography = Typography(
         lineHeight = 16.sp,
     ),
 )
+
+fun lineHeightMultiplierForLanguage(languageCode: String): Float = when (languageCode.lowercase()) {
+    // Devanagari + Bengali script heavy languages
+    "hi", "mr", "ne", "sa", "bn", "as" -> 1.25f
+    // South Indian scripts with larger glyph footprint
+    "ta", "te", "kn", "ml" -> 1.20f
+    else -> 1.12f
+}
+
+fun currentLineHeightMultiplier(): Float {
+    val language = Locale.current.language
+    return lineHeightMultiplierForLanguage(language)
+}
+
+fun TextStyle.withLocaleAwareLineHeight(multiplier: Float = currentLineHeightMultiplier()): TextStyle {
+    return copy(lineHeight = lineHeight * multiplier)
+}

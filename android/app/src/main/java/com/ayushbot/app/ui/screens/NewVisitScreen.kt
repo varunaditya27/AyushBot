@@ -1,7 +1,6 @@
 package com.ayushbot.app.ui.screens
 
 import androidx.compose.animation.*
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -22,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ayushbot.app.ui.components.*
 import com.ayushbot.app.ui.theme.*
+import kotlinx.coroutines.delay
 
 // ═══════════════════════════════════════════════════════════════
 // NewVisitScreen — Multi-step triage wizard with progress stepper
@@ -67,11 +67,27 @@ fun NewVisitScreen(
     onBack: () -> Unit,
     onComplete: () -> Unit,
 ) {
+    val spacing = AyushBotDesignSystem.spacing
     var currentStep by remember { mutableIntStateOf(0) }
     var patientName by remember { mutableStateOf("") }
     var patientAge by remember { mutableStateOf("") }
     var patientSex by remember { mutableStateOf("Female") }
     var selectedSymptoms by remember { mutableStateOf(setOf<String>()) }
+    var sensorQualityOk by remember { mutableStateOf(false) }
+
+    val canProceed = when (currentStep) {
+        0 -> patientName.isNotBlank() && patientAge.toIntOrNull() != null
+        1 -> sensorQualityOk
+        2 -> selectedSymptoms.isNotEmpty()
+        else -> true
+    }
+
+    if (currentStep == 3) {
+        LaunchedEffect(Unit) {
+            delay(1800)
+            onComplete()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -100,7 +116,7 @@ fun NewVisitScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = spacing.lg, vertical = spacing.md),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 stepLabels.forEachIndexed { index, label ->
@@ -135,7 +151,7 @@ fun NewVisitScreen(
                                 }
                             }
                         }
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(spacing.xs))
                         Text(
                             label,
                             style = MaterialTheme.typography.labelSmall,
@@ -146,18 +162,7 @@ fun NewVisitScreen(
                 }
             }
 
-            // Step connector line
-            LinearProgressIndicator(
-                progress = { (currentStep.toFloat()) / (stepLabels.size - 1) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .height(2.dp),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
-            )
-
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(spacing.sm))
 
             // ─── Step Content ───
             AnimatedContent(
@@ -175,7 +180,10 @@ fun NewVisitScreen(
                         age = patientAge, onAgeChange = { patientAge = it },
                         sex = patientSex, onSexChange = { patientSex = it },
                     )
-                    1 -> SensorCaptureStep()
+                    1 -> SensorCaptureStep(
+                        isOffline = false,
+                        onSignalQualityChanged = { sensorQualityOk = it },
+                    )
                     2 -> SymptomChecklistStep(
                         symptoms = symptomList,
                         selected = selectedSymptoms,
@@ -196,8 +204,8 @@ fun NewVisitScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        .padding(spacing.lg),
+                    horizontalArrangement = Arrangement.spacedBy(spacing.md),
                 ) {
                     if (currentStep > 0) {
                         OutlinedButton(
@@ -213,20 +221,18 @@ fun NewVisitScreen(
 
                     Button(
                         onClick = {
-                            if (currentStep < 3) {
+                            if (canProceed && currentStep < 3) {
                                 currentStep++
-                                if (currentStep == 3) {
-                                    // Simulate analysis, then navigate to recommendation
-                                }
                             }
                         },
                         modifier = Modifier
                             .weight(1f)
                             .height(56.dp),
                         shape = MaterialTheme.shapes.extraLarge,
+                        enabled = canProceed,
                     ) {
                         Text(if (currentStep == 2) "Submit" else "Continue")
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(spacing.sm))
                         Icon(
                             if (currentStep == 2) Icons.Rounded.Send else Icons.AutoMirrored.Rounded.ArrowForward,
                             contentDescription = null,
@@ -247,8 +253,9 @@ private fun PatientIdentityStep(
 ) {
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .verticalScroll(rememberScrollState())
+            .imePadding()
             .padding(16.dp),
     ) {
         Text(
@@ -331,14 +338,41 @@ private fun PatientIdentityStep(
 }
 
 @Composable
-private fun SensorCaptureStep() {
+private fun SensorCaptureStep(
+    isOffline: Boolean,
+    onSignalQualityChanged: (Boolean) -> Unit,
+) {
+    val spo2Value = 96f
+    val hrValue = 128f
+    val tempValue = 38.2f
+    val weightKg = "8.2"
+
+    val signalQualitySpo2 = 0.92f
+    val signalQualityHr = 0.85f
+    val signalQualityTemp = 1f
+    val minimumQuality = minOf(signalQualitySpo2, signalQualityHr, signalQualityTemp)
+    val qualityGatePassed = minimumQuality >= 0.8f
+    val criticalDetected = spo2Value < 90f || tempValue >= 39.5f
+
+    LaunchedEffect(qualityGatePassed) {
+        onSignalQualityChanged(qualityGatePassed)
+    }
+
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        if (isOffline) {
+            OfflineStateCard(
+                title = "Gateway unavailable",
+                subtitle = "Capturing vitals in offline mode. You can continue safely.",
+                modifier = Modifier.padding(bottom = 12.dp),
+            )
+        }
+
         // BLE connection banner
         Card(
             shape = MaterialTheme.shapes.medium,
@@ -374,37 +408,50 @@ private fun SensorCaptureStep() {
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
             VitalGauge(
-                value = 96f,
+                value = spo2Value,
                 maxValue = 100f,
                 unit = "%",
                 label = "SpO₂",
-                ringColor = spo2RingColor(96f),
-                signalQuality = 0.92f,
+                ringColor = spo2RingColor(spo2Value),
+                signalQuality = signalQualitySpo2,
             )
             VitalGauge(
-                value = 128f,
+                value = hrValue,
                 maxValue = 200f,
                 unit = "BPM",
                 label = "Heart Rate",
-                ringColor = hrRingColor(128f),
-                signalQuality = 0.85f,
+                ringColor = hrRingColor(hrValue),
+                signalQuality = signalQualityHr,
             )
             VitalGauge(
-                value = 38.2f,
+                value = tempValue,
                 maxValue = 42f,
                 unit = "°C",
                 label = "Temp",
-                ringColor = tempRingColor(38.2f),
-                signalQuality = 1f,
+                ringColor = tempRingColor(tempValue),
+                signalQuality = signalQualityTemp,
                 size = 100.dp,
             )
         }
 
         Spacer(Modifier.height(24.dp))
 
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(top = 8.dp),
+        ) {
+            SignalQualityIndicator(quality = minimumQuality)
+            Text(
+                text = if (qualityGatePassed) "Reading quality: Good" else "Reading quality: Improve sensor placement",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (qualityGatePassed) StateGreen else StateAmber,
+            )
+        }
+
         // Weight input
         OutlinedTextField(
-            value = "8.2",
+            value = weightKg,
             onValueChange = { },
             label = { Text("Weight (kg)") },
             leadingIcon = { Icon(Icons.Rounded.Scale, null) },
@@ -415,9 +462,20 @@ private fun SensorCaptureStep() {
 
         Spacer(Modifier.height(24.dp))
 
+        if (criticalDetected) {
+            ErrorStateCard(
+                title = "Critical vitals detected",
+                subtitle = "Trigger emergency referral immediately before continuing routine flow.",
+                actionLabel = "Emergency Referral",
+                onRetry = { },
+                modifier = Modifier.padding(bottom = 12.dp),
+            )
+        }
+
         // Record button
         Button(
             onClick = { },
+            enabled = qualityGatePassed,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),
@@ -428,7 +486,10 @@ private fun SensorCaptureStep() {
         ) {
             Icon(Icons.Rounded.FiberManualRecord, null, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Record Vitals", style = MaterialTheme.typography.labelLarge)
+            Text(
+                if (qualityGatePassed) "Record Vitals" else "Adjust sensor position",
+                style = MaterialTheme.typography.labelLarge,
+            )
         }
     }
 }
@@ -471,7 +532,7 @@ private fun SymptomChecklistStep(
 
         // Group symptoms and display
         LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+            columns = GridCells.Adaptive(minSize = 160.dp),
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 12.dp),
@@ -481,7 +542,7 @@ private fun SymptomChecklistStep(
         ) {
             val groups = symptoms.groupBy { it.group }
             groups.forEach { (groupName, groupSymptoms) ->
-                item(span = { GridItemSpan(2) }) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     Text(
                         groupName,
                         style = MaterialTheme.typography.titleSmall,

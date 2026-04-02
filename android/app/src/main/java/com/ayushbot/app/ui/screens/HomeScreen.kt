@@ -48,6 +48,19 @@ fun HomeScreen(
     onVoiceQuery: () -> Unit,
     onSettings: () -> Unit,
 ) {
+    val spacing = AyushBotDesignSystem.spacing
+    var homeState by remember {
+        mutableStateOf<ScreenUiState<List<RecentCase>>>(ScreenUiState.Success(sampleCases))
+    }
+
+    val visibleCases = when (val state = homeState) {
+        is ScreenUiState.Success -> state.data
+        is ScreenUiState.Offline -> state.cachedData.orEmpty()
+        else -> emptyList()
+    }
+
+    val criticalPendingCount = visibleCases.count { it.riskTier == RiskTier.CRITICAL && !it.isSynced }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -66,10 +79,10 @@ fun HomeScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { }) {
+                    IconButton(onClick = onSettings) {
                         Icon(
-                            Icons.Rounded.Notifications,
-                            contentDescription = "Notifications",
+                            Icons.Rounded.Settings,
+                            contentDescription = "Settings",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -99,9 +112,43 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(spacing.lg),
         ) {
+            when (val state = homeState) {
+                ScreenUiState.Loading -> {
+                    item {
+                        LoadingStateCard(
+                            title = "Loading local dashboard",
+                            subtitle = "Preparing today summary and latest cases...",
+                        )
+                    }
+                }
+
+                is ScreenUiState.Error -> {
+                    item {
+                        ErrorStateCard(
+                            title = "Couldn’t load recent history",
+                            subtitle = state.message,
+                            onRetry = {
+                                homeState = ScreenUiState.Success(sampleCases)
+                            },
+                        )
+                    }
+                }
+
+                is ScreenUiState.Offline -> {
+                    item {
+                        OfflineStateCard(
+                            title = "Working offline",
+                            subtitle = state.message,
+                        )
+                    }
+                }
+
+                else -> Unit
+            }
+
             // ─── Today's Summary Bar ───
             item {
                 Card(
@@ -114,12 +161,12 @@ fun HomeScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
+                            .padding(spacing.lg),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                     ) {
-                        StatItem(value = "8", label = "Cases Today")
-                        StatItem(value = "3", label = "Pending Sync")
-                        StatItem(value = "2", label = "Critical")
+                        StatItem(value = visibleCases.size.toString(), label = "Cases Today")
+                        StatItem(value = visibleCases.count { !it.isSynced }.toString(), label = "Pending Sync")
+                        StatItem(value = visibleCases.count { it.riskTier == RiskTier.CRITICAL }.toString(), label = "Critical")
                     }
                 }
             }
@@ -127,19 +174,52 @@ fun HomeScreen(
             // ─── Connection Status Chips ───
             item {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(spacing.sm),
                 ) {
                     StatusChip(label = "Sensor Pack", isConnected = true)
-                    StatusChip(label = "PHC Gateway", isConnected = true)
+                    StatusChip(
+                        label = if (homeState is ScreenUiState.Offline<*>) "Offline" else "PHC Gateway",
+                        isConnected = homeState !is ScreenUiState.Offline<*>,
+                    )
+                }
+            }
+
+            if (criticalPendingCount > 0) {
+                item {
+                    Card(
+                        shape = MaterialTheme.shapes.medium,
+                        colors = CardDefaults.cardColors(containerColor = StateCrimsonContainer),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = spacing.lg, vertical = spacing.md),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(spacing.sm),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Warning,
+                                contentDescription = null,
+                                tint = StateCrimson,
+                            )
+                            Text(
+                                text = "$criticalPendingCount critical case(s) need urgent follow-up",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
                 }
             }
 
             // ─── Quick Action Grid (2×2) ───
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(spacing.sm),
                     ) {
                         QuickActionButton(
                             icon = Icons.Rounded.Add,
@@ -156,7 +236,7 @@ fun HomeScreen(
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(spacing.sm),
                     ) {
                         QuickActionButton(
                             icon = Icons.Rounded.RecordVoiceOver,
@@ -197,18 +277,33 @@ fun HomeScreen(
             }
 
             // ─── Recent Cases Feed ───
-            itemsIndexed(sampleCases) { index, case ->
-                AnimatedVisibility(
-                    visible = true,
-                    enter = fadeIn(
-                        animationSpec = tween(300, delayMillis = index * 40)
-                    ) + slideInVertically(
-                        animationSpec = tween(300, delayMillis = index * 40),
-                        initialOffsetY = { 12 }
-                    ),
-                ) {
-                    CaseCard(case = case)
+            if (visibleCases.isEmpty()) {
+                item {
+                    EmptyStateCard(
+                        title = "No cases yet",
+                        subtitle = "Start your first visit to see case history here.",
+                        actionLabel = "Start First Visit",
+                        onAction = onNewVisit,
+                    )
                 }
+            } else {
+                itemsIndexed(visibleCases) { index, case ->
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn(
+                            animationSpec = tween(300, delayMillis = index * 40)
+                        ) + slideInVertically(
+                            animationSpec = tween(300, delayMillis = index * 40),
+                            initialOffsetY = { 12 }
+                        ),
+                    ) {
+                        CaseCard(case = case)
+                    }
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(spacing.xl))
             }
         }
     }

@@ -3,6 +3,8 @@ package com.ayushbot.app.ui.screens
 import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -13,6 +15,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.ayushbot.app.ui.components.EmptyStateCard
+import com.ayushbot.app.ui.components.ErrorStateCard
+import com.ayushbot.app.ui.components.LoadingStateCard
+import com.ayushbot.app.ui.components.OfflineStateCard
 import com.ayushbot.app.ui.components.RiskTier
 import com.ayushbot.app.ui.theme.*
 
@@ -50,10 +56,20 @@ private val filterOptions = listOf("All", "Today", "This Week", "Unsynced", "Cri
 fun CaseHistoryScreen(
     onCaseClick: (String) -> Unit = {},
 ) {
+    val spacing = AyushBotDesignSystem.spacing
     var searchQuery by remember { mutableStateOf("") }
     var activeFilter by remember { mutableStateOf("All") }
+    var historyState by remember {
+        mutableStateOf<ScreenUiState<List<CaseRecord>>>(ScreenUiState.Success(sampleRecords))
+    }
 
-    val filteredCases = sampleRecords.filter { case ->
+    val sourceCases = when (val state = historyState) {
+        is ScreenUiState.Success -> state.data
+        is ScreenUiState.Offline -> state.cachedData.orEmpty()
+        else -> emptyList()
+    }
+
+    val filteredCases = sourceCases.filter { case ->
         val matchesSearch = searchQuery.isBlank() ||
                 case.patientName.contains(searchQuery, ignoreCase = true) ||
                 case.diagnosis.contains(searchQuery, ignoreCase = true)
@@ -84,6 +100,41 @@ fun CaseHistoryScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
+            when (val state = historyState) {
+                ScreenUiState.Loading -> {
+                    LoadingStateCard(
+                        title = "Loading case history",
+                        subtitle = "Fetching latest local records...",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = spacing.lg, vertical = spacing.sm),
+                    )
+                }
+
+                is ScreenUiState.Error -> {
+                    ErrorStateCard(
+                        title = "Couldn’t load case history",
+                        subtitle = state.message,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = spacing.lg, vertical = spacing.sm),
+                        onRetry = { historyState = ScreenUiState.Success(sampleRecords) },
+                    )
+                }
+
+                is ScreenUiState.Offline -> {
+                    OfflineStateCard(
+                        title = "Showing local records",
+                        subtitle = state.message,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = spacing.lg, vertical = spacing.sm),
+                    )
+                }
+
+                else -> Unit
+            }
+
             // ─── Search Bar ───
             OutlinedTextField(
                 value = searchQuery,
@@ -99,19 +150,20 @@ fun CaseHistoryScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .heightIn(min = 56.dp)
+                    .padding(horizontal = spacing.lg, vertical = spacing.sm),
                 shape = MaterialTheme.shapes.extraLarge,
                 singleLine = true,
             )
 
             // ─── Filter Chips ───
-            Row(
+            LazyRow(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .padding(horizontal = spacing.lg, vertical = spacing.xs),
+                horizontalArrangement = Arrangement.spacedBy(spacing.sm),
             ) {
-                filterOptions.forEach { filter ->
+                items(filterOptions) { filter ->
                     FilterChip(
                         selected = activeFilter == filter,
                         onClick = { activeFilter = filter },
@@ -129,19 +181,32 @@ fun CaseHistoryScreen(
                 "${filteredCases.size} case${if (filteredCases.size != 1) "s" else ""}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = spacing.lg, vertical = spacing.sm),
             )
 
             // ─── Case List ───
-            LazyColumn(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                itemsIndexed(filteredCases, key = { _, c -> c.id }) { index, record ->
-                    CaseRecordCard(
-                        record = record,
-                        onClick = { onCaseClick(record.id) },
-                    )
+            if (filteredCases.isEmpty()) {
+                EmptyStateCard(
+                    title = "No matching cases",
+                    subtitle = "Try different filters or start a new visit.",
+                    actionLabel = "Start New Visit",
+                    onAction = { },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = spacing.lg, vertical = spacing.sm),
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = spacing.lg, vertical = spacing.xs),
+                    verticalArrangement = Arrangement.spacedBy(spacing.sm),
+                ) {
+                    itemsIndexed(filteredCases, key = { _, c -> c.id }) { _, record ->
+                        CaseRecordCard(
+                            record = record,
+                            onClick = { onCaseClick(record.id) },
+                        )
+                    }
                 }
             }
         }
@@ -251,12 +316,32 @@ private fun CaseRecordCard(
                     Spacer(Modifier.weight(1f))
 
                     // Sync status
-                    Icon(
-                        imageVector = if (record.isSynced) Icons.Rounded.CloudDone else Icons.Rounded.Sync,
-                        contentDescription = if (record.isSynced) "Synced" else "Pending sync",
-                        tint = if (record.isSynced) StateGreen else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp),
-                    )
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = if (record.isSynced) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                        ) {
+                            Icon(
+                                imageVector = if (record.isSynced) Icons.Rounded.CloudDone else Icons.Rounded.Sync,
+                                contentDescription = if (record.isSynced) "Synced" else "Pending sync",
+                                tint = if (record.isSynced) StateGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Text(
+                                text = if (record.isSynced) "Synced" else "Pending",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (record.isSynced) StateGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
             }
         }

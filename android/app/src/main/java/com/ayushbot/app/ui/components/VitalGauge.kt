@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ayushbot.app.ui.theme.*
@@ -34,9 +35,12 @@ fun VitalGauge(
     label: String,
     ringColor: Color,
     modifier: Modifier = Modifier,
-    size: Dp = 120.dp,
+    size: Dp? = null,
     signalQuality: Float = 1f, // 0..1
 ) {
+    val dynamicSize = (LocalConfiguration.current.screenWidthDp.dp * 0.24f).coerceIn(92.dp, 132.dp)
+    val gaugeSize = size ?: dynamicSize
+
     val animatedProgress by animateFloatAsState(
         targetValue = (value / maxValue).coerceIn(0f, 1f),
         animationSpec = tween(600, easing = FastOutSlowInEasing),
@@ -57,7 +61,7 @@ fun VitalGauge(
     ) {
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier.size(size)
+            modifier = Modifier.size(gaugeSize)
         ) {
             // Background ring
             Canvas(modifier = Modifier.fillMaxSize().padding(4.dp)) {
@@ -116,7 +120,7 @@ fun VitalGauge(
         // Signal quality bar
         Box(
             modifier = Modifier
-                .width(size - 20.dp)
+                .width(gaugeSize - 20.dp)
                 .height(4.dp)
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {

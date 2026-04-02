@@ -1,6 +1,7 @@
 package com.ayushbot.app.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -15,8 +16,10 @@ import com.ayushbot.app.ui.screens.*
 fun AyushNavGraph(
     navController: NavHostController,
     startDestination: String = Screen.Home.route,
+    modifier: Modifier = Modifier,
 ) {
     NavHost(
+        modifier = modifier,
         navController = navController,
         startDestination = startDestination,
     ) {
@@ -82,7 +85,16 @@ fun AyushNavGraph(
 
         // ─── Settings ───
         composable(Screen.Settings.route) {
-            SettingsScreen()
+            SettingsScreen(
+                onOpenSensorManagement = { navController.navigate(Screen.SensorManagement.route) },
+            )
+        }
+
+        // ─── Sensor Management ───
+        composable(Screen.SensorManagement.route) {
+            SensorManagementScreen(
+                onBack = { navController.popBackStack() },
+            )
         }
     }
 }

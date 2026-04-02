@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 // ═══════════════════════════════════════════════════════════════
@@ -25,7 +26,7 @@ fun QuickActionButton(
 ) {
     Card(
         onClick = onClick,
-        modifier = modifier.height(100.dp),
+        modifier = modifier.heightIn(min = 100.dp, max = 140.dp),
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = containerColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
@@ -33,12 +34,12 @@ fun QuickActionButton(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
+                .padding(12.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Surface(
-                modifier = Modifier.size(40.dp),
+                modifier = Modifier.size(36.dp),
                 shape = CircleShape,
                 color = contentColor.copy(alpha = 0.12f),
             ) {
@@ -54,9 +55,10 @@ fun QuickActionButton(
             Spacer(Modifier.height(8.dp))
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.labelMedium,
                 color = contentColor,
-                maxLines = 1,
+                maxLines = 2,
+                textAlign = TextAlign.Center,
             )
         }
     }

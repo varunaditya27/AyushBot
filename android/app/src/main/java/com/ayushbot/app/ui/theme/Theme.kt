@@ -1,8 +1,8 @@
 package com.ayushbot.app.ui.theme
 
 import android.app.Activity
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -100,10 +100,23 @@ fun AyushBotTheme(
         }
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = AyushBotTypography,
-        shapes = AyushBotShapes,
-        content = content
-    )
+    CompositionLocalProvider(
+        LocalAyushBotSpacing provides AyushBotSpacing(),
+        LocalAyushBotMotion provides AyushBotMotion(),
+    ) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = AyushBotTypography,
+            shapes = AyushBotShapes,
+            content = content,
+        )
+    }
+}
+
+object AyushBotDesignSystem {
+    val spacing: AyushBotSpacing
+        @Composable get() = LocalAyushBotSpacing.current
+
+    val motion: AyushBotMotion
+        @Composable get() = LocalAyushBotMotion.current
 }

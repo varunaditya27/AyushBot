@@ -151,15 +151,16 @@ private fun LanguageSelectionStep(
         Spacer(Modifier.height(24.dp))
 
         LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+            columns = GridCells.Adaptive(minSize = 140.dp),
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             items(languages) { lang ->
                 val isSelected = selectedLanguage == lang.code
                 Card(
                     onClick = { onSelect(lang.code) },
+                    modifier = Modifier.heightIn(min = 92.dp),
                     shape = MaterialTheme.shapes.large,
                     colors = CardDefaults.cardColors(
                         containerColor = if (isSelected) {
@@ -178,12 +179,12 @@ private fun LanguageSelectionStep(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(12.dp),
+                            .padding(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Text(
                             text = lang.nameNative,
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                             textAlign = TextAlign.Center,
                         )

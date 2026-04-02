@@ -54,7 +54,7 @@ fun SymptomCard(
             onClick()
         },
         modifier = modifier
-            .height(80.dp)
+            .heightIn(min = 88.dp, max = 136.dp)
             .scale(scale),
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = containerColor),
@@ -66,10 +66,11 @@ fun SymptomCard(
                 .fillMaxSize()
                 .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // Icon in a circular container
             Surface(
-                modifier = Modifier.size(44.dp),
+                modifier = Modifier.size(40.dp),
                 shape = CircleShape,
                 color = if (isSelected) {
                     MaterialTheme.colorScheme.primary
@@ -91,15 +92,12 @@ fun SymptomCard(
                 }
             }
 
-            Spacer(Modifier.width(12.dp))
-
             // Label
             Text(
                 text = label,
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
-                maxLines = 2,
             )
 
             // Checkmark when selected

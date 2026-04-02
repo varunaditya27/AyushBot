@@ -1,6 +1,9 @@
 package com.ayushbot.app.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.History
@@ -8,6 +11,7 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -48,20 +52,31 @@ fun AyushBottomBar(
                 onClick = { onNavigate(item) },
                 icon = {
                     if (item == BottomNavItem.NEW_VISIT) {
-                        // Prominent center button
-                        SmallFloatingActionButton(
-                            onClick = { onNavigate(item) },
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
-                            elevation = FloatingActionButtonDefaults.elevation(
-                                defaultElevation = 2.dp,
-                            ),
+                        Surface(
+                            modifier = Modifier.size(44.dp),
+                            shape = CircleShape,
+                            color = if (selected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.primaryContainer
+                            },
+                            tonalElevation = if (selected) 2.dp else 0.dp,
                         ) {
-                            Icon(
-                                imageVector = item.icon,
-                                contentDescription = item.label,
-                                modifier = Modifier.size(28.dp),
-                            )
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    imageVector = item.icon,
+                                    contentDescription = item.label,
+                                    modifier = Modifier.size(24.dp),
+                                    tint = if (selected) {
+                                        MaterialTheme.colorScheme.onPrimary
+                                    } else {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    },
+                                )
+                            }
                         }
                     } else {
                         Icon(
@@ -70,16 +85,18 @@ fun AyushBottomBar(
                         )
                     }
                 },
-                label = if (item != BottomNavItem.NEW_VISIT) {
-                    {
-                        Text(
-                            text = item.label,
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                    }
-                } else null,
+                label = {
+                    Text(
+                        text = item.label,
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                },
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedIconColor = if (item == BottomNavItem.NEW_VISIT) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
                     selectedTextColor = MaterialTheme.colorScheme.primary,
                     indicatorColor = MaterialTheme.colorScheme.primaryContainer,
                     unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,

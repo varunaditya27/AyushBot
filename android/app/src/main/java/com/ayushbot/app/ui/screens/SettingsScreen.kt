@@ -20,9 +20,12 @@ import com.ayushbot.app.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(
+    onOpenSensorManagement: () -> Unit = {},
+) {
     var offlineMode by remember { mutableStateOf(false) }
     var darkMode by remember { mutableStateOf(false) }
+    var statusMessage by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
@@ -41,6 +44,22 @@ fun SettingsScreen() {
                 .padding(padding)
                 .verticalScroll(rememberScrollState()),
         ) {
+            if (statusMessage != null) {
+                AssistChip(
+                    onClick = { statusMessage = null },
+                    label = { Text(statusMessage!!) },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Rounded.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    },
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
+
             // ─── ASHA Profile Section ───
             SettingsGroup(title = "Profile") {
                 Card(
@@ -102,7 +121,10 @@ fun SettingsScreen() {
                     trailing = {
                         Switch(
                             checked = darkMode,
-                            onCheckedChange = { darkMode = it },
+                            onCheckedChange = {
+                                darkMode = it
+                                statusMessage = "Display preference saved locally."
+                            },
                         )
                     },
                 )
@@ -113,7 +135,14 @@ fun SettingsScreen() {
                     trailing = {
                         Switch(
                             checked = offlineMode,
-                            onCheckedChange = { offlineMode = it },
+                            onCheckedChange = {
+                                offlineMode = it
+                                statusMessage = if (it) {
+                                    "Offline mode enabled. Sync will resume when disabled."
+                                } else {
+                                    "Offline mode disabled. Sync can resume."
+                                }
+                            },
                         )
                     },
                 )
@@ -134,6 +163,12 @@ fun SettingsScreen() {
                     subtitle = "AyushBot-SP-04A2 · Battery: 78%",
                     subtitleColor = StateGreen,
                     onClick = { },
+                )
+                SettingsItem(
+                    icon = Icons.Rounded.Build,
+                    title = "Sensor Management",
+                    subtitle = "Run diagnostics, inspect signal quality",
+                    onClick = onOpenSensorManagement,
                 )
             }
 
@@ -177,14 +212,14 @@ private fun SettingsGroup(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
     ) {
         Text(
             title,
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(bottom = 8.dp, start = 4.dp),
+            modifier = Modifier.padding(bottom = 6.dp, start = 8.dp),
         )
         Card(
             shape = MaterialTheme.shapes.large,
