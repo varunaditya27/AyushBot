@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD033 MD036 MD041 MD042 MD060 -->
+
 <div align="center">
 
 # 🏥 AyushBot: Clinical Triage & Navigation System
@@ -59,20 +61,43 @@ Each directory represents a decoupled component of the system. Click on any dire
 
 ## 🚀 Quick Start
 
-To bootstrap the local development environment:
+To bootstrap local development across gateway + Android frontend:
 
 ```bash
-# 1. Install dependencies via poetry
+# 1) Install dependencies
 make install
 
-# 2. Start the local gateway (Redis, Mosquitto, FastAPI)
+# 2) Start local PHC gateway stack (Redis + Mosquitto + FastAPI)
 make dev-gateway
 
-# 3. In a separate terminal, run Android UI
-cd android && ./gradlew installDebug
+# 3) Build and install Android app
+cd android
+./gradlew assembleDebug
+./gradlew installDebug
 ```
 
-For advanced deployment instructions, refer to the [`/infra` documentation](infra/README.md).
+For advanced deployment instructions, refer to [`/infra`](infra/README.md).
+
+## 🎨 Frontend Design Authority
+
+The Android frontend is implemented against these canonical documents:
+
+- `android/docs/ayushbot-design-specs-legendary.md` (UI implementation authority)
+- `android/docs/ayushbot-branding-guide-legendary.md` (brand/voice authority)
+
+The Android module README is updated to match the implemented screen/state architecture:
+
+- [`android/README.md`](android/README.md)
+
+## 📚 Documentation Map
+
+| Document | Purpose | Audience |
+|---|---|---|
+| `android/docs/ayushbot-design-specs-legendary.md` | Frontend UI/UX implementation contract | Android engineers, QA |
+| `android/docs/ayushbot-branding-guide-legendary.md` | Brand strategy, tone, governance | PM, design, comms |
+| `android/README.md` | Android app architecture, screens, build/test flow | Android developers |
+| `docs/agentic-architecture.md` | Multi-agent system architecture | Backend/ML engineers |
+| `infra/README.md` | Deployment and infra operations | DevOps/platform |
 
 ## 🛡️ License
 

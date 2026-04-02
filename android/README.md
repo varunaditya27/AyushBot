@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD033 MD036 MD041 -->
+
 <div align="center">
 
 # 📱 AyushBot Android Client
@@ -6,72 +8,162 @@
 
 </div>
 
-## 📌 Overview
+## 📌 Canonical Design References
 
-The `/android` directory contains the native Android application used by ASHA workers. It is built using **Kotlin** and **Jetpack Compose** (Material Design 3). The core philosophy of this app is to serve as an independent, offline-capable unit that can operate entirely without internet connectivity, relying solely on local network (MQTT) protocols for edge syncing and BLE for hardware interfacing.
+Frontend implementation in this module follows these two canonical documents:
 
-## 🏗️ App Architecture
+- `android/docs/ayushbot-design-specs-legendary.md` (**implementation authority**)
+- `android/docs/ayushbot-branding-guide-legendary.md` (**brand/voice authority**)
 
-The app follows Clean Architecture principles, leveraging the Model-View-ViewModel (MVVM) pattern combined with Unidirectional Data Flow (UDF) for robust UI state management.
+If any UI behavior conflicts with earlier docs, follow the **legendary** documents.
 
-```mermaid
-graph TD
-    %% Layers
-    UI[🖥️ Presentation Layer<br/>Compose UI + ViewModels]:::ui
-    Domain[🧠 Domain Layer<br/>Use Cases + Models]:::domain
-    Data[💾 Data Layer<br/>Repositories + Local DB]:::data
-    Hardware[📟 Hardware Layer<br/>BLE Service]:::hw
-    Network[🌐 Network Layer<br/>MQTT / REST]:::net
+---
 
-    %% Flow
-    UI -- "Intents" --> Domain
-    Domain -- "StateFlow" --> UI
-    Domain -- "CRUD Requests" --> Data
-    Data -- "BLE Read/Write" --> Hardware
-    Data -- "Background Sync" --> Network
+## 🧭 Frontend Architecture (Current)
 
-    %% Styles
-    classDef ui fill:#e3f2fd,stroke:#1565c0,color:#0d47a1
-    classDef domain fill:#f3e5f5,stroke:#6a1b9a,color:#4a148c
-    classDef data fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
-    classDef hw fill:#fff3e0,stroke:#e65100,color:#e65100
-    classDef net fill:#fff8e1,stroke:#f57f17,color:#f57f17
-```
+The Android app is implemented in **Kotlin + Jetpack Compose (Material 3)** with an offline-first design contract.
 
-## 🧩 Core Components
+### UI layers in this module
 
-### 1. UI & Design System (`ui/`)
-- **Theme (`ui/theme/`)**: Implements an invariant clinical status color palette (Green, Amber, Orange, Crimson) alongside a standard Material 3 system. Dynamic Color is explicitly disabled to prevent misinterpretation of medical alerts.
-- **Custom Components (`ui/components/`)**: Houses reusable widgets like `RiskBadge.kt` (pulsing critical animations), `VitalGauge.kt` (custom canvas circular gauges), and `SymptomCard.kt`.
+- `ui/theme/` → color, typography, shape, spacing, motion, semantics primitives
+- `ui/components/` → reusable components (`RiskBadge`, `VitalGauge`, `ActionPlanCard`, `VoicePlaybackButton`, etc.)
+- `ui/screens/` → screen implementations and UI-state handling (`ScreenUiState`, `VoiceMicState`, `SyncState`)
+- `navigation/` → route graph and destination wiring
 
-### 2. Local Database (`data/local/`)
-Encrypted local persistence layer leveraging **Room**.
-- **`PatientEntity`**: Stores core demographics.
-- **`CaseEntity`**: Captures timestamped triage events in an offline-first manner.
-- **`RecommendationEntity`**: Caches edge-LLM generated action plans.
+### Layout safety foundations
 
-### 3. Background Services
-- **WorkManager Sync**: Manages Delay-Tolerant Networking (DTN) bulk uploads to the PHC Gateway when the device rejoins the local offline intranet.
-- **BLE Foreground Service**: Maintains a persistent persistent connection to the ESP32 sensor pack to prevent Android OS culling.
+- Root scaffold insets are propagated into `NavHost` content to prevent bottom bar overlap.
+- Reusable spacing/motion primitives are centralized (`Spacing.kt`, `Motion.kt`).
+- Accessibility semantics helpers are centralized (`Semantics.kt`).
 
-## 🚦 Navigation Flow
+---
 
-1. **Splash/Onboarding**: Language Selection (13 native options) $\rightarrow$ ASHA ID Form $\rightarrow$ Local Gateway Discovery.
-2. **Dashboard**: Home feed managing recent cases, quick actions, and sync status.
-3. **Triage Wizard**: Step-by-step diagnostic capture (Vitals + Symptoms) concluding with a unified Risk Assessment Card.
-4. **Voice Query**: Chat-style interface hooking directly into the Edge-Hosted RAG via local API.
+## 🎨 Design System Implementation
 
-## 🛠️ Build Instructions
+### Color and risk semantics
 
-Ensure you have Android Studio installed and targeting Java 17.
+- Material 3 static color schemes are used (dynamic color intentionally disabled for clinical safety).
+- Clinical risk semantics are invariant and non-decorative:
+  - Safe: `#1B6E2C`
+  - Monitor: `#B45309`
+  - High: `#C2410C`
+  - Critical: `#9B1C1C`
 
-```bash
-# Navigate to directory
-cd android
+### Typography
 
-# Build Debug APK
-./gradlew assembleDebug
+- Primary: Noto Sans
+- Evidence/citation text: Noto Serif
+- Numeric vitals: JetBrains Mono
+- Locale-aware line-height helper exists for script-specific readability.
 
-# Run unit tests
-./gradlew testDebugUnitTest
-```
+### Spacing + touch targets
+
+- 4dp base grid with tokens (`xs`→`xxl`) in `Spacing.kt`
+- Minimum touch targets: 48×48dp
+- Fixed-height high-risk components were replaced with bounded/adaptive sizing where required.
+
+---
+
+## 🧩 Screen Catalog (Implemented)
+
+### 1) Onboarding
+
+- language selection (adaptive grid)
+- ASHA profile setup
+- gateway pairing
+
+### 2) Home
+
+- today summary
+- quick actions
+- recent cases list
+- state handling: loading / empty / error / offline
+- critical-pending strip for urgent follow-ups
+
+### 3) New Visit Wizard
+
+- step flow: Patient → Vitals → Symptoms → Analyzing
+- quality-gated sensor capture
+- responsive symptom grid
+- validation-gated progression
+
+### 4) Recommendation
+
+- hierarchy: Risk Badge → Primary Diagnosis → Action Plan → Evidence → Voice CTA
+- state handling: loading / empty / error / offline
+- low-confidence warning behavior
+
+### 5) Case History
+
+- search + filter chips (horizontally scrollable)
+- explicit sync-status chips on cards
+- state handling: loading / empty / error / offline
+
+### 6) Voice Query
+
+- chat interface with citation chips
+- voice state machine: idle / listening / processing / error
+- keyboard-safe bottom input bar and responsive chat bubble widths
+
+### 7) Settings
+
+- profile and connection sections
+- local-save feedback for toggle settings
+- route into Sensor Management
+
+### 8) Sensor Management
+
+- sensor connection status
+- live gauges
+- signal-quality diagnostics
+- self-test and calibration affordances
+
+---
+
+## ♿ Accessibility & Clean Layout Guarantees
+
+Current frontend implementation enforces:
+
+- no meaning by color alone for clinical risk
+- responsive/bounded component sizing for larger font scales
+- reduced nested padding conflicts in key screens
+- keyboard + navigation bar inset handling for input screens
+- reusable semantic helpers for headings and live-region alerts
+
+Recommended manual checks before release:
+
+- TalkBack traversal on Home/New Visit/Recommendation/Voice Query
+- large-font checks (1.3x / 1.5x)
+- portrait + landscape overlap checks on small and medium devices
+
+---
+
+## 🔄 Offline-First UX Behavior
+
+UI explicitly surfaces connectivity context:
+
+- offline banners/cards in stateful screens
+- pending/synced status visibility in history/home
+- local-first behavior in voice and recommendation flows when online resources are unavailable
+
+---
+
+## 🛠️ Build & Test
+
+From `android/`:
+
+- Build debug APK: `./gradlew assembleDebug`
+- Install debug APK: `./gradlew installDebug`
+- Unit tests: `./gradlew testDebugUnitTest`
+
+For UI verification, run app on emulator/physical device and validate the state matrix behavior on each major screen.
+
+---
+
+## 📎 Key Frontend Paths
+
+- `app/src/main/java/com/ayushbot/app/AyushBotApp.kt`
+- `app/src/main/java/com/ayushbot/app/navigation/NavGraph.kt`
+- `app/src/main/java/com/ayushbot/app/ui/theme/`
+- `app/src/main/java/com/ayushbot/app/ui/components/`
+- `app/src/main/java/com/ayushbot/app/ui/screens/`
