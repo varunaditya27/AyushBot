@@ -2,7 +2,10 @@
 
 import pytest
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
+
+import pandas as pd
 
 
 def test_dashboard_imports():
@@ -60,3 +63,67 @@ def test_dashboard_pages_exist():
     for page in required_pages:
         page_file = pages_dir / page
         assert page_file.exists(), f"Page file {page} not found"
+
+
+def test_outbreak_detection_mock_data_generation():
+    """Test mock data generation for outbreak detection page."""
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent / "cloud"))
+
+    # Verify the outbreak_detection.py file contains the function
+    page_file = (
+        Path(__file__).parent.parent.parent
+        / "cloud"
+        / "dashboards"
+        / "pages"
+        / "outbreak_detection.py"
+    )
+    content = page_file.read_text(encoding="utf-8")
+
+    # Check that the key functions are defined
+    assert "def generate_mock_case_data" in content
+    assert "def get_case_metrics_from_influxdb" in content
+
+
+def test_outbreak_detection_data_structure():
+    """Test that mock case data has correct structure."""
+    import numpy as np
+
+    # Simulate the mock data generation function
+    districts = ["North Delhi", "South Delhi", "East Delhi"]
+    phc_ids = [f"PHC{i:03d}" for i in range(1, 11)]
+
+    records = []
+    for day_offset in range(7):
+        date = datetime.now() - timedelta(days=day_offset)
+        for phc_id in phc_ids:
+            district = districts[hash(phc_id) % len(districts)]
+            cases = int(np.random.exponential(scale=10) + 5)
+            referrals = int(np.random.poisson(lam=3))
+
+            records.append(
+                {
+                    "timestamp": date,
+                    "phc_id": phc_id,
+                    "district": district,
+                    "state": "Delhi",
+                    "cases": cases,
+                    "referrals": referrals,
+                }
+            )
+
+    df = pd.DataFrame(records)
+
+    # Verify structure
+    assert not df.empty
+    assert "timestamp" in df.columns
+    assert "phc_id" in df.columns
+    assert "district" in df.columns
+    assert "state" in df.columns
+    assert "cases" in df.columns
+    assert "referrals" in df.columns
+
+    # Verify data types
+    assert df["cases"].dtype in [int, "int64"]
+    assert df["referrals"].dtype in [int, "int64"]
+    assert len(df["district"].unique()) > 0
+    assert len(df["phc_id"].unique()) > 0

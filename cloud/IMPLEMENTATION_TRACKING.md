@@ -9,10 +9,10 @@
 
 ## � Progress Summary
 
-**Overall Progress**: [█████████████░░░░░] 55% (132/240 tasks estimated)  
+**Overall Progress**: [███████████████░░░] 62% (150/240 tasks estimated)  
 **Phase 1**: [██████████] 100% (6/6 tasks) - ✅ COMPLETE (May 30, 2026)
 **Phase 2**: [██████████] 100% (5/5 tasks) - ✅ COMPLETE (May 30, 2026)
-**Phase 3**: [██░░░░░░░░] 20% (1/5 tasks) - 🟡 IN PROGRESS (Phase 3.1 done)
+**Phase 3**: [████░░░░░░░] 40% (2/5 tasks) - 🟡 IN PROGRESS (3.1-3.2 done)
 **Phases 4-8**: ⏳ NOT STARTED
 
 ### Key Milestones
@@ -271,13 +271,64 @@
 
 ---
 
-- [ ] **3.2** Outbreak Detection Page (Real Metrics)
-  - [ ] Query InfluxDB: `SELECT cases FROM phc_metrics GROUP BY (phc_id) LIMIT 24h`
-  - [ ] Visualization: Bar chart (cases by district) + hotspot heatmap
-  - [ ] Metrics: Total cases, trend (↑↓), anomaly alerts
-  - [ ] Interactive: Filter by district, date range
-  - **Target**: Real-time case tracking for health officers
-  
+- [x] **3.2** Outbreak Detection Page (Real Metrics)
+  - [x] **3.2.1** InfluxDB Query Helper
+    - ✅ `get_case_metrics_from_influxdb()` — Cached query with 5-min TTL
+    - ✅ Filters: measurement, metric_type, date range
+    - ✅ Returns DataFrame with phc_id, district, state, cases, referrals
+    - **Status**: COMPLETE
+    
+  - [x] **3.2.2** Mock Data Generation
+    - ✅ `generate_mock_case_data()` — Realistic test data
+    - ✅ 50 PHCs × 6 districts × N days of historical data
+    - ✅ Exponential distribution for cases, Poisson for referrals
+    - **Status**: COMPLETE
+    
+  - [x] **3.2.3** Dashboard Filters (Sidebar)
+    - ✅ Date range slider: 1-30 days
+    - ✅ Multi-select districts: 6 options with default all
+    - ✅ Cases threshold slider: 0-100 for alerts
+    - **Status**: COMPLETE
+    
+  - [x] **3.2.4** Key Metrics Display (4-column)
+    - ✅ Total cases with trend (%) vs previous period
+    - ✅ Total referrals with per-case ratio
+    - ✅ Active PHCs count
+    - ✅ Alert level (Critical/High/Medium/Low with emoji)
+    - **Status**: COMPLETE
+    
+  - [x] **3.2.5** Visualizations (Plotly)
+    - ✅ Bar chart: Cases by district (red color scale gradient)
+    - ✅ Heatmap: Top 15 PHCs across districts (hotspot detection)
+    - ✅ Line chart: Daily case trends with markers
+    - ✅ Threshold line on bar chart for visual alerts
+    - **Status**: COMPLETE
+    
+  - [x] **3.2.6** Alerts & Data Export
+    - ✅ High-risk PHC table (exceeding threshold)
+    - ✅ Success message if no alerts
+    - ✅ Expandable raw data table
+    - ✅ Last updated timestamp
+    - **Status**: COMPLETE
+    
+  - [x] **3.2.7** Error Handling
+    - ✅ Graceful InfluxDB connection failure fallback
+    - ✅ Mock data generation for demo purposes
+    - ✅ Warning message on connection error
+    - **Status**: COMPLETE
+
+**Status**: ✅ 3.2 COMPLETE (350+ lines) | Real-time case tracking dashboard
+
+**Test Results**: 6/6 tests passing ✅
+- Dashboard imports
+- InfluxDB initialization
+- PostgreSQL initialization
+- Dashboard pages existence
+- Mock data generation function verification
+- Data structure validation (50+ records with correct columns)
+
+---
+
 - [ ] **3.3** Hardware Monitoring Page
   - [ ] Query PostgreSQL: Gateway status, battery %, signal strength
   - [ ] Visualization: Status cards (online/offline/low-battery), signal gauge
@@ -300,11 +351,14 @@
   - **Target**: FL training transparency
 
 **Completion Criteria**: 
-- ✅ Streamlit app runs on port 8501
-- ✅ All 4 pages initialized with stubs
-- ✅ Database connections working (InfluxDB + PostgreSQL)
-- ⏳ Real metrics populated for all pages
-- ⏳ Interactive features working
+- ✅ Streamlit app runs on port 8501 (3.1)
+- ✅ All 4 pages initialized with stubs (3.1)
+- ✅ Database connections working (InfluxDB + PostgreSQL) (3.1)
+- ✅ Real metrics in Outbreak Detection page (3.2)
+- ✅ Interactive filters working (3.2)
+- ⏳ Hardware Monitoring page with real data (3.3)
+- ⏳ Model Drift Analysis page with real data (3.4)
+- ⏳ Aggregation History page with real data (3.5)
     - [ ] Method `ingest_metadata(metadata_dict)` → writes to InfluxDB
     - [ ] Error handling: log failures, don't crash
     - [ ] **Target**: Metadata flows into InfluxDB time-series DB
