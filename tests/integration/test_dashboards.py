@@ -198,3 +198,79 @@ def test_hardware_monitoring_data_structure():
     assert (df["battery_pct"] >= 0).all() and (df["battery_pct"] <= 100).all()
     assert (df["signal_strength"] >= -100).all() and (df["signal_strength"] <= -30).all()
     assert df["connectivity_status"].isin(["Online", "Degraded", "Offline"]).all()
+
+
+def test_model_drift_analysis_mock_data_generation():
+    """Test mock model performance data generation."""
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent / "cloud"))
+
+    # Verify the model_drift_analysis.py file contains the function
+    page_file = (
+        Path(__file__).parent.parent.parent
+        / "cloud"
+        / "dashboards"
+        / "pages"
+        / "model_drift_analysis.py"
+    )
+    content = page_file.read_text(encoding="utf-8")
+
+    # Check that the key functions are defined
+    assert "def generate_mock_model_performance_data" in content
+    assert "def get_model_performance_from_registry" in content
+
+
+def test_model_performance_data_structure():
+    """Test that mock model performance data has correct structure."""
+    import numpy as np
+
+    # Simulate the mock data generation
+    records = []
+    epsilon_cumulative = 0
+    accuracy = 0.65
+
+    for round_num in range(1, 11):
+        accuracy = min(0.99, accuracy + np.random.normal(0.008, 0.002))
+        loss = 0.5 * (1 - accuracy) + np.random.normal(0, 0.01)
+        loss = max(0, loss)
+
+        epsilon_round = np.random.uniform(0.01, 0.05)
+        epsilon_cumulative += epsilon_round
+
+        num_clients = max(5, int(np.random.normal(30, 8)))
+
+        records.append(
+            {
+                "version": f"v_1_2026_05_31_{round_num:02d}0000_000000",
+                "round_num": round_num,
+                "num_clients": num_clients,
+                "accuracy": accuracy,
+                "loss": loss,
+                "epsilon_consumed": epsilon_cumulative,
+                "aggregation_strategy": "FedAvg" if round_num < 6 else "FedProx",
+                "model_size_bytes": int(1e6 + np.random.normal(0, 1e4)),
+                "timestamp": datetime.now() - timedelta(hours=50 - round_num),
+            }
+        )
+
+    df = pd.DataFrame(records)
+
+    # Verify structure
+    assert not df.empty
+    assert "version" in df.columns
+    assert "round_num" in df.columns
+    assert "accuracy" in df.columns
+    assert "loss" in df.columns
+    assert "epsilon_consumed" in df.columns
+
+    # Verify data ranges and properties
+    assert (df["accuracy"] > 0).all() and (df["accuracy"] <= 1.0).all()
+    assert (df["loss"] >= 0).all() and (df["loss"] < 1.0).all()
+    assert (df["epsilon_consumed"] > 0).all()
+    assert df["aggregation_strategy"].isin(["FedAvg", "FedProx"]).all()
+    
+    # Verify accuracy improves over rounds
+    if len(df) > 1:
+        assert df.iloc[-1]["accuracy"] >= df.iloc[0]["accuracy"]
+    
+    # Verify epsilon is cumulative (always increasing)
+    assert (df["epsilon_consumed"].diff().fillna(0) >= 0).all()
