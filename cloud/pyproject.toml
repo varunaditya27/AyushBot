@@ -1,0 +1,124 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ayushbot-cloud"
+version = "0.1.0"
+description = "AyushBot Cloud Sync Server - Federated Learning Aggregation & Analytics"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "AyushBot Team", email = "ayushbot@example.com"}
+]
+dependencies = [
+    # --- Federated Learning ---
+    "flwr>=1.6.0",          # Flower FL framework (server + common)
+    
+    # --- Cloud API ---
+    "fastapi>=0.109.0",     # Async web framework
+    "uvicorn[standard]>=0.27.0",  # ASGI server with HTTP/2 and WebSocket
+    "pydantic>=2.0",        # Data validation and serialization
+    "python-multipart>=0.0.6",  # File upload support
+    
+    # --- Database ---
+    "sqlalchemy>=2.0",      # ORM for PostgreSQL
+    "psycopg2-binary>=2.9",  # PostgreSQL driver
+    "alembic>=1.13.0",      # Database migration management
+    
+    # --- Analytics Dashboard ---
+    "streamlit>=1.28.0",    # Dashboard framework
+    "plotly>=5.17.0",       # Interactive charts
+    "pandas>=2.0",          # Data manipulation
+    "geopandas>=0.13.0",    # Geographic data for India map
+    "folium>=0.14.0",       # Map visualization
+    
+    # --- Time-Series Database ---
+    "influxdb-client>=1.18.0",  # InfluxDB client
+    
+    # --- Numerical & Scientific ---
+    "numpy>=1.24",          # Array operations
+    "scipy>=1.11.0",        # Scientific computing
+    "scikit-learn>=1.3.0",  # Preprocessing, metrics
+    "xgboost>=2.0.0",       # Model format compatibility
+    
+    # --- Security & Encryption ---
+    "cryptography>=41.0",   # Certificate management, TLS
+    "python-jose>=3.3.0",   # JWT token handling
+    
+    # --- Cloud Storage ---
+    "boto3>=1.28.0",        # AWS S3 support (optional)
+    
+    # --- Utilities ---
+    "pyyaml>=6.0",          # YAML config file parsing
+    "httpx>=0.25.0",        # Async HTTP client
+    "structlog>=23.1.0",    # Structured JSON logging
+    "prometheus-client>=0.18.0",  # Metrics export for monitoring
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.9.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+    "pre-commit>=3.4.0",
+]
+
+ml-training = [
+    "optuna>=3.13.0",       # Hyperparameter optimization
+    "shap>=0.42.0",         # Feature importance (SHAP values)
+    "matplotlib>=3.8.0",
+    "seaborn>=0.13.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: Tests that take > 5 seconds (FL rounds, model inference)",
+    "integration: Tests requiring multiple components or Docker",
+    "unit: Unit tests with no external dependencies",
+]
+asyncio_mode = "auto"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+include = '\.pyi?$'
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF"]
+ignore = ["E501"]  # Long lines — handled by black
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+disallow_incomplete_defs = false
+disallow_untyped_defs = false
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.coverage.run]
+source = ["cloud"]
+omit = [
+    "*/tests/*",
+    "*/venv/*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
