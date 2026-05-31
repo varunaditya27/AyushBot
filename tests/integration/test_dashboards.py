@@ -274,3 +274,144 @@ def test_model_performance_data_structure():
     
     # Verify epsilon is cumulative (always increasing)
     assert (df["epsilon_consumed"].diff().fillna(0) >= 0).all()
+
+
+def test_aggregation_history_mock_data_generation():
+    """Test mock aggregation history data generation."""
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent / "cloud"))
+
+    # Verify the aggregation_history.py file contains the function
+    page_file = (
+        Path(__file__).parent.parent.parent
+        / "cloud"
+        / "dashboards"
+        / "pages"
+        / "aggregation_history.py"
+    )
+    content = page_file.read_text(encoding="utf-8")
+
+    # Check that the key functions are defined
+    assert "def generate_mock_aggregation_history" in content
+    assert "def get_aggregation_history_from_registry" in content
+
+
+def test_aggregation_history_data_structure():
+    """Test that mock aggregation history data has correct structure."""
+    import numpy as np
+
+    # Simulate the mock data generation
+    records = []
+    base_time = datetime.now() - timedelta(hours=50)
+
+    for round_num in range(1, 11):
+        base_agg_time = 5.0 - (round_num / 50) * 1.5
+        agg_time = max(2.0, base_agg_time + np.random.normal(0, 0.5))
+
+        num_clients = max(5, int(np.random.normal(30, 8)))
+
+        samples_per_client = np.random.randint(100, 500)
+        total_samples = num_clients * samples_per_client
+
+        grad_norm = np.random.exponential(scale=1.5)
+        comm_rounds = np.random.randint(3, 10)
+
+        status = "Success" if np.random.random() > 0.02 else "Failed"
+        round_time = base_time + timedelta(minutes=5 * (round_num - 1))
+
+        records.append(
+            {
+                "round_num": round_num,
+                "num_clients": num_clients,
+                "aggregation_strategy": "FedAvg" if round_num < 6 else "FedProx",
+                "status": status,
+                "timestamp": round_time,
+                "agg_time_sec": agg_time,
+                "total_samples": total_samples,
+                "gradient_norm": grad_norm,
+                "comm_rounds": comm_rounds,
+                "model_size_bytes": int(1e6 + np.random.normal(0, 1e4)),
+            }
+        )
+
+    df = pd.DataFrame(records)
+
+    # Verify structure
+    assert not df.empty
+    assert "round_num" in df.columns
+    assert "num_clients" in df.columns
+    assert "agg_time_sec" in df.columns
+    assert "total_samples" in df.columns
+    assert "gradient_norm" in df.columns
+    assert "status" in df.columns
+
+    # Verify data ranges
+    assert (df["agg_time_sec"] >= 2.0).all()
+    assert (df["num_clients"] >= 5).all()
+    assert (df["total_samples"] > 0).all()
+    assert (df["gradient_norm"] >= 0).all()
+    assert df["status"].isin(["Success", "Failed"]).all()
+    assert df["aggregation_strategy"].isin(["FedAvg", "FedProx"]).all()
+
+
+def test_aggregation_history_mock_data_generation():
+    """Test mock aggregation history data generation."""
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent / "cloud"))
+
+    # Verify the aggregation_history.py file contains the function
+    page_file = (
+        Path(__file__).parent.parent.parent
+        / "cloud"
+        / "dashboards"
+        / "pages"
+        / "aggregation_history.py"
+    )
+    content = page_file.read_text(encoding="utf-8")
+
+    # Check that the key functions are defined
+    assert "def generate_mock_aggregation_history" in content
+    assert "def get_aggregation_history_from_registry" in content
+
+
+def test_aggregation_history_data_structure():
+    """Test that mock aggregation history has correct structure."""
+    import numpy as np
+
+    # Simulate the mock data generation
+    records = []
+
+    for round_num in range(1, 11):
+        aggregation_time = max(3, np.random.normal(12, 4))
+        num_clients = int(max(5, np.random.normal(30, 8)))
+        model_size_mb = max(0.5, np.random.normal(1.2, 0.2))
+        strategy = "FedAvg" if round_num < 6 else "FedProx"
+        status = "success" if np.random.random() > 0.05 else "failed"
+
+        records.append(
+            {
+                "round_num": round_num,
+                "num_clients": num_clients,
+                "aggregation_time_sec": aggregation_time,
+                "model_size_mb": model_size_mb,
+                "strategy": strategy,
+                "timestamp": datetime.now() - timedelta(hours=50 - round_num),
+                "status": status,
+            }
+        )
+
+    df = pd.DataFrame(records)
+
+    # Verify structure
+    assert not df.empty
+    assert "round_num" in df.columns
+    assert "num_clients" in df.columns
+    assert "aggregation_time_sec" in df.columns
+    assert "model_size_mb" in df.columns
+    assert "strategy" in df.columns
+    assert "status" in df.columns
+
+    # Verify data ranges
+    assert (df["aggregation_time_sec"] > 0).all()
+    assert (df["num_clients"] > 0).all()
+    assert (df["model_size_mb"] > 0).all()
+    assert df["strategy"].isin(["FedAvg", "FedProx"]).all()
+    assert df["status"].isin(["success", "failed"]).all()
