@@ -1,5 +1,6 @@
 """FastAPI REST API for AyushBot Cloud - FL Server Integration."""
 
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -118,11 +119,37 @@ async def shutdown_event():
 
 
 if __name__ == "__main__":
+    # TLS certificate configuration
+    # Set CERTFILE and KEYFILE env vars to enable TLS
+    # Or set ENABLE_TLS=true to use default certs from cloud/certs/
+    
+    certfile = os.getenv("CERTFILE")
+    keyfile = os.getenv("KEYFILE")
+    enable_tls = os.getenv("ENABLE_TLS", "false").lower() == "true"
+    
+    if not certfile or not keyfile:
+        if enable_tls:
+            # Use default certificates from cloud/certs/
+            certs_dir = Path(__file__).parent.parent / "certs"
+            certfile = str(certs_dir / "server.crt")
+            keyfile = str(certs_dir / "server.key")
+        else:
+            certfile = None
+            keyfile = None
+    
+    # Log TLS status
+    if certfile and keyfile:
+        print("🔒 TLS ENABLED - Using certificates:")
+        print(f"   Certificate: {certfile}")
+        print(f"   Key: {keyfile}")
+    else:
+        print("⚠️  TLS DISABLED - Running without encryption (development only)")
+    
     # Development server
     uvicorn.run(
         app,
         host="0.0.0.0",
         port=8443,
-        ssl_keyfile=None,  # TLS to be added in Phase 5
-        ssl_certfile=None,
+        ssl_keyfile=keyfile,
+        ssl_certfile=certfile,
     )
