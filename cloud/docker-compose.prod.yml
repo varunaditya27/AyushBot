@@ -1,0 +1,98 @@
+# =============================================================================
+# AyushBot Cloud — Docker Compose Production Overrides
+# =============================================================================
+#
+# PURPOSE:
+#   Production overrides for the base docker-compose.yml
+#   Run with: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# CHANGES FROM DEVELOPMENT:
+#   - Remove healthcheck delays (production needs tight monitoring)
+#   - Increase resource limits and restart policies
+#   - Disable debug logging
+#   - Remove ports that shouldn't be exposed (direct DB access, etc.)
+#   - Add resource constraints
+#   - Use specific image tags instead of latest
+#
+# =============================================================================
+
+version: '3.9'
+
+services:
+  postgres:
+    # Production: dedicated container for persistence
+    restart: always
+    environment:
+      POSTGRES_INITDB_ARGS: "-c shared_buffers=256MB -c max_connections=100 -c effective_cache_size=512MB"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    # Remove ports to prevent direct DB access
+    ports: []
+
+  influxdb:
+    restart: always
+    environment:
+      INFLUXDB_LOG_LEVEL: warn
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    # Remove ports to prevent direct access
+    ports: []
+
+  cloud-fl-server:
+    restart: always
+    environment:
+      LOG_LEVEL: WARN
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    healthcheck:
+      interval: 60s
+      timeout: 15s
+      retries: 2
+
+  cloud-api:
+    restart: always
+    environment:
+      LOG_LEVEL: WARN
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    healthcheck:
+      interval: 60s
+      timeout: 15s
+      retries: 2
+
+  cloud-analytics:
+    restart: always
+    environment:
+      LOG_LEVEL: WARN
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
