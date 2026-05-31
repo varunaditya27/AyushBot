@@ -5,13 +5,14 @@ from datetime import datetime
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from cloud.api.exceptions import APIException
 from cloud.api.middleware.rate_limit import RateLimitMiddleware
 from cloud.api.routes import health, fl_status, model
 
@@ -62,27 +63,40 @@ app.include_router(model.router, prefix="/api/v1/models", tags=["Models"])
 
 
 # Error handlers
+@app.exception_handler(APIException)
+async def api_exception_handler(request: Request, exc: APIException):
+    """Handle custom API exceptions."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=exc.to_dict(),
+    )
+
+
 @app.exception_handler(HTTPException)
-async def http_exception_handler(request, exc):
-    """Custom HTTP exception handler."""
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Handle FastAPI HTTP exceptions."""
     return JSONResponse(
         status_code=exc.status_code,
         content={
             "error": exc.detail,
+            "error_code": "HTTP_ERROR",
             "status_code": exc.status_code,
+            "request_id": getattr(request.state, "request_id", "unknown"),
             "timestamp": datetime.utcnow().isoformat(),
         },
     )
 
 
 @app.exception_handler(Exception)
-async def general_exception_handler(request, exc):
-    """Catch-all exception handler."""
+async def general_exception_handler(request: Request, exc: Exception):
+    """Catch-all exception handler for unhandled errors."""
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "error": "Internal server error",
-            "detail": str(exc),
+            "error_code": "INTERNAL_SERVER_ERROR",
+            "status_code": 500,
+            "request_id": getattr(request.state, "request_id", "unknown"),
             "timestamp": datetime.utcnow().isoformat(),
         },
     )

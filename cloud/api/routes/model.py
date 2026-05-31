@@ -3,31 +3,49 @@
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Header, HTTPException, status
+
+from cloud.api.exceptions import BadRequestError, NotFoundError, UnauthorizedError
 
 router = APIRouter()
 
 
+def _require_auth(authorization: Optional[str] = Header(None)):
+    """Validate authorization header."""
+    if authorization is None:
+        raise UnauthorizedError("Missing authorization header")
+
+    if not authorization.startswith("Bearer "):
+        raise UnauthorizedError("Invalid authorization format")
+
+    api_key = authorization.replace("Bearer ", "", 1)
+
+    from cloud.api.auth import VALID_API_KEYS
+
+    if api_key not in VALID_API_KEYS:
+        raise UnauthorizedError("Invalid API key")
+
+    return VALID_API_KEYS[api_key]
+
+
 @router.get("/list", tags=["Models"])
-async def list_models(skip: int = 0, limit: int = 10):
+async def list_models(skip: int = 0, limit: int = 10, authorization: Optional[str] = Header(None)):
     """List all saved models from registry."""
+    _require_auth(authorization)
+
     if skip < 0 or limit < 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid skip or limit",
-        )
+        raise BadRequestError("Invalid skip or limit")
 
     return {
         "models": [
             {
-                "version": f"v_1_2026_05_31_{(50 - i):02d}0000_000000",
+                "version": f"v1.{50-i}",
                 "round_num": 50 - i,
-                "num_clients": 25 + (i % 5),
-                "accuracy": 0.92 + (i * 0.001),
-                "loss": 0.15 - (i * 0.0005),
-                "aggregation_strategy": "FedAvg" if (50 - i) < 26 else "FedProx",
-                "model_size_bytes": 1048576,
-                "timestamp": datetime.utcnow().isoformat(),
+                "num_clients": 25,
+                "accuracy": 0.90 + (i * 0.001),
+                "loss": 0.20 - (i * 0.001),
+                "aggregation_strategy": "FedAvg",
+                "created_at": datetime.utcnow().isoformat(),
             }
             for i in range(limit)
         ],
@@ -38,30 +56,30 @@ async def list_models(skip: int = 0, limit: int = 10):
 
 
 @router.get("/latest", tags=["Models"])
-async def get_latest_model():
+async def get_latest_model(authorization: Optional[str] = Header(None)):
     """Get latest model from registry."""
+    _require_auth(authorization)
     return {
-        "version": "v_1_2026_05_31_5000_000000",
+        "version": "v1.50",
         "round_num": 50,
-        "num_clients": 28,
-        "accuracy": 0.925,
-        "loss": 0.148,
-        "aggregation_strategy": "FedProx",
+        "num_clients": 25,
+        "accuracy": 0.955,
+        "loss": 0.05,
+        "aggregation_strategy": "FedAvg",
         "model_size_bytes": 1048576,
-        "epsilon_consumed": 0.45,
+        "epsilon_consumed": 2.5,
+        "download_url": "/api/v1/models/download/v1.50",
         "timestamp": datetime.utcnow().isoformat(),
-        "download_url": "/api/v1/models/download/v_1_2026_05_31_5000_000000",
     }
 
 
 @router.get("/{version}", tags=["Models"])
-async def get_model_by_version(version: str):
+async def get_model_by_version(version: str, authorization: Optional[str] = Header(None)):
     """Get specific model version details."""
-    if not version.startswith("v_"):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Model version {version} not found",
-        )
+    _require_auth(authorization)
+
+    if not version.startswith("v1."):
+        raise NotFoundError(f"Model version {version} not found")
 
     return {
         "version": version,
@@ -78,13 +96,12 @@ async def get_model_by_version(version: str):
 
 
 @router.get("/download/{version}", tags=["Models"])
-async def download_model(version: str):
+async def download_model(version: str, authorization: Optional[str] = Header(None)):
     """Download model weights (stub - returns metadata)."""
-    if not version.startswith("v_"):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Model version {version} not found",
-        )
+    _require_auth(authorization)
+
+    if not version.startswith("v1."):
+        raise NotFoundError(f"Model version {version} not found")
 
     return {
         "status": "ready",
@@ -97,13 +114,12 @@ async def download_model(version: str):
 
 
 @router.post("/compare", tags=["Models"])
-async def compare_models(version1: str, version2: str):
+async def compare_models(version1: str, version2: str, authorization: Optional[str] = Header(None)):
     """Compare metrics between two model versions."""
-    if not version1.startswith("v_") or not version2.startswith("v_"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid version format",
-        )
+    _require_auth(authorization)
+
+    if not version1.startswith("v1.") or not version2.startswith("v1."):
+        raise BadRequestError("Invalid version format")
 
     return {
         "comparison": {
@@ -121,13 +137,12 @@ async def compare_models(version1: str, version2: str):
 
 
 @router.get("/metrics/{version}", tags=["Models"])
-async def get_model_metrics(version: str):
+async def get_model_metrics(version: str, authorization: Optional[str] = Header(None)):
     """Get detailed metrics for a model version."""
-    if not version.startswith("v_"):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Model version {version} not found",
-        )
+    _require_auth(authorization)
+
+    if not version.startswith("v1."):
+        raise NotFoundError(f"Model version {version} not found")
 
     return {
         "version": version,

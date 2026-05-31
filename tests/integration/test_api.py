@@ -15,6 +15,9 @@ from cloud.api.main import app
 # Create test client
 client = TestClient(app)
 
+# Valid API key for testing
+ADMIN_API_KEY = "admin-key-12345"
+
 
 class TestHealthEndpoints:
     """Test health check endpoints."""
@@ -59,7 +62,10 @@ class TestFLStatusEndpoints:
 
     def test_fl_status(self):
         """Test FL server status endpoint."""
-        response = client.get("/api/v1/fl/status")
+        response = client.get(
+            "/api/v1/fl/status",
+            headers={"Authorization": f"Bearer {ADMIN_API_KEY}"},
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["server_running"] is True
@@ -69,7 +75,10 @@ class TestFLStatusEndpoints:
 
     def test_list_fl_rounds(self):
         """Test listing FL rounds."""
-        response = client.get("/api/v1/fl/rounds?skip=0&limit=5")
+        response = client.get(
+            "/api/v1/fl/rounds?skip=0&limit=5",
+            headers={"Authorization": f"Bearer {ADMIN_API_KEY}"},
+        )
         assert response.status_code == 200
         data = response.json()
         assert "rounds" in data
@@ -80,12 +89,18 @@ class TestFLStatusEndpoints:
 
     def test_list_fl_rounds_invalid_skip(self):
         """Test listing FL rounds with invalid skip."""
-        response = client.get("/api/v1/fl/rounds?skip=-1&limit=5")
+        response = client.get(
+            "/api/v1/fl/rounds?skip=-1&limit=5",
+            headers={"Authorization": f"Bearer {ADMIN_API_KEY}"},
+        )
         assert response.status_code == 400
 
     def test_get_fl_round(self):
         """Test getting specific FL round."""
-        response = client.get("/api/v1/fl/rounds/25")
+        response = client.get(
+            "/api/v1/fl/rounds/25",
+            headers={"Authorization": f"Bearer {ADMIN_API_KEY}"},
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["round_num"] == 25
@@ -95,12 +110,18 @@ class TestFLStatusEndpoints:
 
     def test_get_fl_round_not_found(self):
         """Test getting non-existent FL round."""
-        response = client.get("/api/v1/fl/rounds/999")
+        response = client.get(
+            "/api/v1/fl/rounds/999",
+            headers={"Authorization": f"Bearer {ADMIN_API_KEY}"},
+        )
         assert response.status_code == 404
 
     def test_trigger_fl_round(self):
         """Test triggering FL round."""
-        response = client.post("/api/v1/fl/rounds/trigger")
+        response = client.post(
+            "/api/v1/fl/rounds/trigger",
+            headers={"Authorization": f"Bearer {ADMIN_API_KEY}"},
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "triggered"
@@ -108,7 +129,10 @@ class TestFLStatusEndpoints:
 
     def test_fl_config(self):
         """Test FL configuration endpoint."""
-        response = client.get("/api/v1/fl/config")
+        response = client.get(
+            "/api/v1/fl/config",
+            headers={"Authorization": f"Bearer {ADMIN_API_KEY}"},
+        )
         assert response.status_code == 200
         data = response.json()
         assert "port" in data
@@ -122,7 +146,10 @@ class TestModelEndpoints:
 
     def test_list_models(self):
         """Test listing models."""
-        response = client.get("/api/v1/models/list?skip=0&limit=5")
+        response = client.get(
+            "/api/v1/models/list?skip=0&limit=5",
+            headers={"Authorization": f"Bearer {ADMIN_API_KEY}"},
+        )
         assert response.status_code == 200
         data = response.json()
         assert "models" in data
@@ -133,12 +160,18 @@ class TestModelEndpoints:
 
     def test_list_models_invalid_limit(self):
         """Test listing models with invalid limit."""
-        response = client.get("/api/v1/models/list?skip=0&limit=0")
+        response = client.get(
+            "/api/v1/models/list?skip=0&limit=0",
+            headers={"Authorization": f"Bearer {ADMIN_API_KEY}"},
+        )
         assert response.status_code == 400
 
     def test_get_latest_model(self):
         """Test getting latest model."""
-        response = client.get("/api/v1/models/latest")
+        response = client.get(
+            "/api/v1/models/latest",
+            headers={"Authorization": f"Bearer {ADMIN_API_KEY}"},
+        )
         assert response.status_code == 200
         data = response.json()
         assert "version" in data
@@ -149,34 +182,44 @@ class TestModelEndpoints:
 
     def test_get_model_by_version(self):
         """Test getting model by version."""
-        response = client.get("/api/v1/models/v_1_2026_05_31_5000_000000")
+        response = client.get(
+            "/api/v1/models/v1.50",
+            headers={"Authorization": f"Bearer {ADMIN_API_KEY}"},
+        )
         assert response.status_code == 200
         data = response.json()
-        assert data["version"] == "v_1_2026_05_31_5000_000000"
+        assert data["version"] == "v1.50"
         assert "accuracy" in data
         assert "aggregation_strategy" in data
 
     def test_get_model_invalid_version(self):
         """Test getting model with invalid version."""
-        response = client.get("/api/v1/models/invalid_version")
+        response = client.get(
+            "/api/v1/models/invalid_version",
+            headers={"Authorization": f"Bearer {ADMIN_API_KEY}"},
+        )
         assert response.status_code == 404
 
     def test_download_model(self):
         """Test model download endpoint."""
-        response = client.get("/api/v1/models/download/v_1_2026_05_31_5000_000000")
+        response = client.get(
+            "/api/v1/models/download/v1.50",
+            headers={"Authorization": f"Bearer {ADMIN_API_KEY}"},
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "ready"
-        assert data["version"] == "v_1_2026_05_31_5000_000000"
+        assert data["version"] == "v1.50"
 
     def test_compare_models(self):
         """Test model comparison endpoint."""
         response = client.post(
             "/api/v1/models/compare",
             params={
-                "version1": "v_1_2026_05_31_5000_000000",
-                "version2": "v_1_2026_05_31_4900_000000",
+                "version1": "v1.50",
+                "version2": "v1.49",
             },
+            headers={"Authorization": f"Bearer {ADMIN_API_KEY}"},
         )
         assert response.status_code == 200
         data = response.json()
@@ -190,15 +233,17 @@ class TestModelEndpoints:
             "/api/v1/models/compare",
             params={
                 "version1": "invalid",
-                "version2": "v_1_2026_05_31_5000_000000",
+                "version2": "v1.50",
             },
+            headers={"Authorization": f"Bearer {ADMIN_API_KEY}"},
         )
         assert response.status_code == 400
 
     def test_get_model_metrics(self):
         """Test getting model metrics."""
         response = client.get(
-            "/api/v1/models/metrics/v_1_2026_05_31_5000_000000"
+            "/api/v1/models/metrics/v1.50",
+            headers={"Authorization": f"Bearer {ADMIN_API_KEY}"},
         )
         assert response.status_code == 200
         data = response.json()
@@ -254,13 +299,18 @@ class TestEndpointStructure:
     def test_endpoints_exist(self):
         """Test key endpoints exist."""
         endpoints = [
-            "/",
-            "/api/v1/health/",
-            "/api/v1/fl/status",
-            "/api/v1/fl/rounds",
-            "/api/v1/models/list",
+            ("/", None),
+            ("/api/v1/health/", None),
+            ("/api/v1/fl/status", ADMIN_API_KEY),
+            ("/api/v1/fl/rounds", ADMIN_API_KEY),
+            ("/api/v1/models/list", ADMIN_API_KEY),
         ]
 
-        for endpoint in endpoints:
-            response = client.get(endpoint)
+        for endpoint, auth_key in endpoints:
+            headers = (
+                {"Authorization": f"Bearer {auth_key}"}
+                if auth_key
+                else {}
+            )
+            response = client.get(endpoint, headers=headers)
             assert response.status_code in [200, 404], f"Endpoint {endpoint} failed"
