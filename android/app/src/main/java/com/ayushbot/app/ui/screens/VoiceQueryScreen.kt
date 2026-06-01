@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Sync
@@ -42,9 +43,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -54,25 +54,15 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.ayushbot.app.core.di.LocalAppContainer
+import com.ayushbot.app.llm.LlmStatus
 import com.ayushbot.app.ui.components.ErrorStateCard
 import com.ayushbot.app.ui.components.OfflineStateCard
 import com.ayushbot.app.ui.theme.AyushBotDesignSystem
-import kotlinx.coroutines.delay
-
-data class ChatMessage(
-    val text: String,
-    val isUser: Boolean,
-    val citation: String? = null,
-)
-
-private val sampleConversation = listOf(
-    ChatMessage("What is the correct dose of ORS for a 2-year-old with moderate dehydration?", isUser = true),
-    ChatMessage(
-        text = "For a 2-year-old child (~12 kg) with moderate dehydration:\n\n• Give 75 mL/kg of ORS solution over 4 hours\n• That's approximately 900 mL over 4 hours\n• Give frequent small sips using a cup\n• If vomiting occurs, wait 10 minutes then continue slowly.",
-        isUser = false,
-        citation = "IMCI Chart Booklet, Sect. 5, p. 78",
-    ),
-)
+import com.ayushbot.app.ui.voice.ChatMessage
+import com.ayushbot.app.ui.voice.VoiceQueryViewModel
+import com.ayushbot.app.ui.voice.VoiceQueryViewModelFactory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,24 +70,18 @@ fun VoiceQueryScreen(
     onBack: () -> Unit,
 ) {
     val spacing = AyushBotDesignSystem.spacing
+    val appContainer = LocalAppContainer.current
+    val viewModel: VoiceQueryViewModel = viewModel(
+        factory = VoiceQueryViewModelFactory(
+            chatEngine = appContainer.llmChatEngine,
+            appConfig = appContainer.appConfig,
+        ),
+    )
+    val uiState by viewModel.uiState.collectAsState()
     var inputText by remember { mutableStateOf("") }
-    var micState by remember { mutableStateOf(VoiceMicState.IDLE) }
-    var isOffline by remember { mutableStateOf(false) }
-    val messages = remember { mutableStateListOf(*sampleConversation.toTypedArray()) }
-
-    LaunchedEffect(micState) {
-        if (micState == VoiceMicState.PROCESSING) {
-            delay(1200)
-            messages.add(
-                ChatMessage(
-                    text = "I heard your query and processed it locally. You can continue with referral-safe guidance while offline.",
-                    isUser = false,
-                    citation = "Offline protocol mode",
-                )
-            )
-            micState = VoiceMicState.IDLE
-        }
-    }
+    val micState = uiState.micState
+    val messages = uiState.messages
+    val isOffline = uiState.isOffline
 
     Scaffold(
         topBar = {
@@ -118,15 +102,24 @@ fun VoiceQueryScreen(
                     }
                 },
                 actions = {
-                    AssistChip(
-                        onClick = { isOffline = !isOffline },
-                        label = {
-                            Text(if (isOffline) "Offline" else "Online")
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Rounded.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
-                        },
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                        AssistChip(
+                            onClick = viewModel::toggleOffline,
+                            label = {
+                                Text(if (isOffline) "Offline" else "Online")
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Rounded.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                            },
+                        )
+                        AssistChip(
+                            onClick = { },
+                            label = { Text(llmStatusLabel(uiState.llmStatus)) },
+                            leadingIcon = {
+                                Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                            },
+                        )
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -163,14 +156,7 @@ fun VoiceQueryScreen(
                         )
 
                         FloatingActionButton(
-                            onClick = {
-                                micState = when (micState) {
-                                    VoiceMicState.IDLE -> VoiceMicState.LISTENING
-                                    VoiceMicState.LISTENING -> VoiceMicState.PROCESSING
-                                    VoiceMicState.PROCESSING -> VoiceMicState.PROCESSING
-                                    VoiceMicState.ERROR -> VoiceMicState.IDLE
-                                }
-                            },
+                            onClick = viewModel::onMicTapped,
                             modifier = Modifier
                                 .size(48.dp)
                                 .graphicsLayer {
@@ -210,9 +196,8 @@ fun VoiceQueryScreen(
                             trailingIcon = {
                                 if (inputText.isNotBlank()) {
                                     IconButton(onClick = {
-                                        messages.add(ChatMessage(inputText, isUser = true))
+                                        viewModel.submitText(inputText)
                                         inputText = ""
-                                        micState = VoiceMicState.PROCESSING
                                     }) {
                                         Icon(Icons.AutoMirrored.Rounded.Send, "Send", tint = MaterialTheme.colorScheme.primary)
                                     }
@@ -241,12 +226,34 @@ fun VoiceQueryScreen(
                 }
             }
 
+            when (val status = uiState.llmStatus) {
+                is LlmStatus.MissingModel -> {
+                    item {
+                        ErrorStateCard(
+                            title = "Model file not found",
+                            subtitle = "Expected model at ${status.path}. Update app_config.json or push the .litertlm file to the device.",
+                            onRetry = viewModel::retryLlm,
+                        )
+                    }
+                }
+                is LlmStatus.Error -> {
+                    item {
+                        ErrorStateCard(
+                            title = "LLM error",
+                            subtitle = status.message,
+                            onRetry = viewModel::retryLlm,
+                        )
+                    }
+                }
+                else -> Unit
+            }
+
             if (micState == VoiceMicState.ERROR) {
                 item {
                     ErrorStateCard(
                         title = "Voice processing failed",
                         subtitle = "Please retry voice input or type your question.",
-                        onRetry = { micState = VoiceMicState.IDLE },
+                        onRetry = viewModel::onMicTapped,
                     )
                 }
             }
@@ -255,10 +262,11 @@ fun VoiceQueryScreen(
                 ChatBubble(message = message)
             }
 
-            if (micState == VoiceMicState.PROCESSING) {
+            if (uiState.isProcessing) {
                 item {
                     ChatBubble(
                         message = ChatMessage(
+                            id = "thinking",
                             text = "Thinking...",
                             isUser = false,
                         )
@@ -266,6 +274,16 @@ fun VoiceQueryScreen(
                 }
             }
         }
+    }
+}
+
+private fun llmStatusLabel(status: LlmStatus): String {
+    return when (status) {
+        LlmStatus.Idle -> "LLM: idle"
+        LlmStatus.Loading -> "LLM: loading"
+        LlmStatus.Ready -> "LLM: ready"
+        is LlmStatus.MissingModel -> "LLM: missing model"
+        is LlmStatus.Error -> "LLM: error"
     }
 }
 
