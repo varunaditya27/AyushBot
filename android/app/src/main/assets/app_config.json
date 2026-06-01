@@ -1,0 +1,27 @@
+{
+  "demoMode": true,
+  "mock": {
+    "useMockBackend": true,
+    "useMockSensors": true,
+    "useMockLlm": false
+  },
+  "backend": {
+    "baseUrl": "http://10.0.2.2:8000/",
+    "mqttBrokerUrl": "ssl://10.0.2.2:8883",
+    "mqttClientId": "ayushbot-android",
+    "mqttUsername": "",
+    "mqttPassword": ""
+  },
+  "llm": {
+    "modelPath": "/data/local/tmp/llm/gemma-3n-E4B-it-int4.litertlm",
+    "backend": "GPU",
+    "maxTokens": 1024,
+    "topK": 40,
+    "topP": 0.95,
+    "temperature": 0.8,
+    "systemPrompt": "You are AyushBot, an offline-first clinical decision support assistant for ASHA workers. Provide concise, protocol-aligned guidance. Always be safe and suggest referral when uncertain.",
+    "cacheDir": "",
+    "enableVision": false,
+    "enableAudio": false
+  }
+}
