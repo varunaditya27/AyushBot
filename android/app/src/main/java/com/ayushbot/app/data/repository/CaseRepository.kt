@@ -1,0 +1,14 @@
+package com.ayushbot.app.data.repository
+
+import com.ayushbot.app.data.model.TriageCase
+import com.ayushbot.app.data.remote.model.CaseCreateRequest
+import com.ayushbot.app.data.remote.model.RecommendationResponse
+import kotlinx.coroutines.flow.Flow
+
+interface CaseRepository {
+    fun observeCases(): Flow<List<TriageCase>>
+
+    suspend fun submitCase(request: CaseCreateRequest): Result<String>
+
+    suspend fun getRecommendation(caseId: String): Result<RecommendationResponse>
+}
