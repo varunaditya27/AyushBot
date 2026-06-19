@@ -1,5 +1,9 @@
 package com.ayushbot.app.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -52,8 +56,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ayushbot.app.core.di.LocalAppContainer
 import com.ayushbot.app.llm.LlmStatus
@@ -75,13 +81,29 @@ fun VoiceQueryScreen(
         factory = VoiceQueryViewModelFactory(
             chatEngine = appContainer.llmChatEngine,
             appConfig = appContainer.appConfig,
+            voiceOrchestrator = appContainer.voiceOrchestrator,
         ),
     )
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = viewModel::onMicPermissionResult,
+    )
     var inputText by remember { mutableStateOf("") }
     val micState = uiState.micState
     val messages = uiState.messages
     val isOffline = uiState.isOffline
+    fun handleMicTap() {
+        val hasPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO,
+        ) == PackageManager.PERMISSION_GRANTED
+        viewModel.onMicTapped(hasPermission)
+        if (!hasPermission) {
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -117,6 +139,13 @@ fun VoiceQueryScreen(
                             label = { Text(llmStatusLabel(uiState.llmStatus)) },
                             leadingIcon = {
                                 Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                            },
+                        )
+                        AssistChip(
+                            onClick = { },
+                            label = { Text(voiceStatusLabel(uiState.voiceEngine, uiState.isSpeaking)) },
+                            leadingIcon = {
+                                Icon(Icons.Rounded.Mic, contentDescription = null, modifier = Modifier.size(16.dp))
                             },
                         )
                     }
@@ -156,7 +185,7 @@ fun VoiceQueryScreen(
                         )
 
                         FloatingActionButton(
-                            onClick = viewModel::onMicTapped,
+                            onClick = ::handleMicTap,
                             modifier = Modifier
                                 .size(48.dp)
                                 .graphicsLayer {
@@ -179,7 +208,12 @@ fun VoiceQueryScreen(
 
                         OutlinedTextField(
                             value = inputText,
-                            onValueChange = { inputText = it },
+                            onValueChange = {
+                                inputText = it
+                                if (uiState.voiceErrorMessage != null) {
+                                    viewModel.clearVoiceError()
+                                }
+                            },
                             placeholder = {
                                 Text(
                                     when (micState) {
@@ -248,12 +282,60 @@ fun VoiceQueryScreen(
                 else -> Unit
             }
 
+            item {
+                VoiceReadinessCard(
+                    languageLabel = uiState.voiceLanguageLabel,
+                    message = uiState.voiceReadinessMessage,
+                    modelsReady = uiState.voiceModelsReady,
+                    canDownload = uiState.canDownloadVoiceModels,
+                    isDownloading = uiState.isDownloadingModels,
+                    downloadProgress = uiState.voiceDownloadProgress,
+                    onDownload = viewModel::downloadVoiceModels,
+                )
+            }
+
+            if (uiState.partialTranscript != null) {
+                item {
+                    Surface(
+                        shape = MaterialTheme.shapes.large,
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(modifier = Modifier.padding(spacing.md)) {
+                            Text(
+                                text = "Heard so far",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            Spacer(Modifier.height(spacing.xs))
+                            Text(
+                                text = uiState.partialTranscript.orEmpty(),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    }
+                }
+            }
+
             if (micState == VoiceMicState.ERROR) {
                 item {
                     ErrorStateCard(
                         title = "Voice processing failed",
-                        subtitle = "Please retry voice input or type your question.",
-                        onRetry = viewModel::onMicTapped,
+                        subtitle = uiState.voiceErrorMessage ?: "Please retry voice input or type your question.",
+                        onRetry = ::handleMicTap,
+                    )
+                }
+            }
+
+            if (uiState.isSpeaking) {
+                item {
+                    ErrorStateCard(
+                        title = "Reading response aloud",
+                        subtitle = "Tap stop if the playback is no longer needed.",
+                        actionLabel = "Stop",
+                        onRetry = viewModel::stopSpeaking,
                     )
                 }
             }
@@ -284,6 +366,69 @@ private fun llmStatusLabel(status: LlmStatus): String {
         LlmStatus.Ready -> "LLM: ready"
         is LlmStatus.MissingModel -> "LLM: missing model"
         is LlmStatus.Error -> "LLM: error"
+    }
+}
+
+private fun voiceStatusLabel(engine: com.ayushbot.app.voice.VoiceEngineType?, isSpeaking: Boolean): String {
+    if (isSpeaking) return "Voice: speaking"
+    return when (engine) {
+        com.ayushbot.app.voice.VoiceEngineType.INDIC -> "Voice: Indic"
+        com.ayushbot.app.voice.VoiceEngineType.ANDROID -> "Voice: Android"
+        null -> "Voice: ready"
+    }
+}
+
+@Composable
+private fun VoiceReadinessCard(
+    languageLabel: String,
+    message: String,
+    modelsReady: Boolean,
+    canDownload: Boolean,
+    isDownloading: Boolean,
+    downloadProgress: Int,
+    onDownload: () -> Unit,
+) {
+    val spacing = AyushBotDesignSystem.spacing
+
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = if (modelsReady) {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        } else {
+            MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.55f)
+        },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(spacing.md)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Voice language: $languageLabel",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(Modifier.height(spacing.xs))
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (canDownload && !modelsReady) {
+                    AssistChip(
+                        onClick = onDownload,
+                        enabled = !isDownloading,
+                        label = {
+                            Text(if (isDownloading) "$downloadProgress%" else "Download")
+                        },
+                    )
+                }
+            }
+        }
     }
 }
 

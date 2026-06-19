@@ -7,7 +7,11 @@ import com.ayushbot.app.core.config.AppConfig
 import com.ayushbot.app.llm.LlmChatEngine
 import com.ayushbot.app.llm.LlmStatus
 import com.ayushbot.app.ui.screens.VoiceMicState
-import kotlinx.coroutines.delay
+import com.ayushbot.app.voice.VoiceEngineType
+import com.ayushbot.app.voice.VoiceOrchestrator
+import com.ayushbot.app.voice.asr.AsrListener
+import com.ayushbot.app.voice.tts.TtsListener
+import com.ayushbot.app.core.config.VoiceLanguage
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -41,16 +45,65 @@ data class VoiceQueryUiState(
     val isProcessing: Boolean = false,
     val llmStatus: LlmStatus = LlmStatus.Idle,
     val errorMessage: String? = null,
+    val voiceEngine: VoiceEngineType? = null,
+    val voiceLanguageId: String = "en",
+    val voiceLanguageTag: String = "en-US",
+    val voiceModelsReady: Boolean = true,
+    val isDownloadingModels: Boolean = false,
+    val voiceDownloadProgress: Int = 0,
+    val voiceErrorMessage: String? = null,
+    val partialTranscript: String? = null,
+    val isSpeaking: Boolean = false,
+    val voiceLanguageLabel: String = "English",
+    val canDownloadVoiceModels: Boolean = false,
+    val voiceReadinessMessage: String = "Android speech fallback is available.",
 )
 
 class VoiceQueryViewModel(
     private val chatEngine: LlmChatEngine,
     private val appConfig: AppConfig,
+    private val voiceOrchestrator: VoiceOrchestrator,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(VoiceQueryUiState())
     val uiState: StateFlow<VoiceQueryUiState> = _uiState.asStateFlow()
+    private var pendingMicStart = false
+
+    private val asrListener = object : AsrListener {
+        override fun onPartial(text: String) {
+            _uiState.update { it.copy(partialTranscript = text) }
+        }
+
+        override fun onFinal(text: String) {
+            _uiState.update { it.copy(partialTranscript = null) }
+            submitText(text)
+        }
+
+        override fun onError(message: String) {
+            _uiState.update {
+                it.copy(
+                    micState = VoiceMicState.ERROR,
+                    voiceErrorMessage = message,
+                )
+            }
+        }
+    }
+
+    private val ttsListener = object : TtsListener {
+        override fun onStart(utteranceId: String) {
+            _uiState.update { it.copy(isSpeaking = true) }
+        }
+
+        override fun onDone(utteranceId: String) {
+            _uiState.update { it.copy(isSpeaking = false) }
+        }
+
+        override fun onError(utteranceId: String, message: String) {
+            _uiState.update { it.copy(isSpeaking = false, voiceErrorMessage = message) }
+        }
+    }
 
     init {
+        initializeVoiceState()
         warmUpLlm()
     }
 
@@ -58,13 +111,71 @@ class VoiceQueryViewModel(
         _uiState.update { it.copy(isOffline = !it.isOffline) }
     }
 
-    fun onMicTapped() {
+    fun onMicTapped(hasMicPermission: Boolean) {
         val current = _uiState.value.micState
         when (current) {
-            VoiceMicState.IDLE -> _uiState.update { it.copy(micState = VoiceMicState.LISTENING) }
-            VoiceMicState.LISTENING -> simulateVoiceCapture()
+            VoiceMicState.IDLE -> startListening(hasMicPermission)
+            VoiceMicState.LISTENING -> stopListening()
             VoiceMicState.PROCESSING -> Unit
-            VoiceMicState.ERROR -> _uiState.update { it.copy(micState = VoiceMicState.IDLE) }
+            VoiceMicState.ERROR -> startListening(hasMicPermission)
+        }
+    }
+
+    fun onMicPermissionResult(granted: Boolean) {
+        if (!pendingMicStart) return
+        pendingMicStart = false
+        if (granted) {
+            startListening(hasMicPermission = true)
+        } else {
+            _uiState.update {
+                it.copy(
+                    micState = VoiceMicState.ERROR,
+                    voiceErrorMessage = "Microphone permission denied",
+                )
+            }
+        }
+    }
+
+    fun clearVoiceError() {
+        _uiState.update { it.copy(voiceErrorMessage = null) }
+    }
+
+    fun stopSpeaking() {
+        voiceOrchestrator.stopSpeaking()
+        _uiState.update { it.copy(isSpeaking = false) }
+    }
+
+    fun downloadVoiceModels() {
+        val languageId = _uiState.value.voiceLanguageId
+        if (_uiState.value.isDownloadingModels || !_uiState.value.canDownloadVoiceModels) return
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isDownloadingModels = true,
+                    voiceDownloadProgress = 0,
+                    voiceErrorMessage = null,
+                )
+            }
+            val result = voiceOrchestrator.downloadModels(languageId) { progress ->
+                _uiState.update { it.copy(voiceDownloadProgress = progress) }
+            }
+            result.onSuccess {
+                _uiState.update {
+                    it.copy(
+                        isDownloadingModels = false,
+                        voiceModelsReady = true,
+                        voiceDownloadProgress = 100,
+                        voiceReadinessMessage = "Indic voice models are ready for ${it.voiceLanguageLabel}.",
+                    )
+                }
+            }.onFailure { error ->
+                _uiState.update {
+                    it.copy(
+                        isDownloadingModels = false,
+                        voiceErrorMessage = error.message ?: "Voice model download failed",
+                    )
+                }
+            }
         }
     }
 
@@ -130,26 +241,96 @@ class VoiceQueryViewModel(
                 }
             } finally {
                 _uiState.update { it.copy(isProcessing = false, micState = VoiceMicState.IDLE) }
+                speakLatestAssistantMessage()
             }
         }
     }
 
-    private fun simulateVoiceCapture() {
-        _uiState.update { it.copy(micState = VoiceMicState.PROCESSING) }
-        viewModelScope.launch {
-            delay(1200)
-            val hint = ChatMessage(
-                id = UUID.randomUUID().toString(),
-                text = "Voice capture is coming soon. For now, type your question for live on-device answers.",
-                isUser = false,
-                citation = "Voice module in progress",
-            )
+    private fun startListening(hasMicPermission: Boolean) {
+        if (!appConfig.voice.enabled) {
+            _uiState.update { it.copy(voiceErrorMessage = "Voice input is disabled in config") }
+            return
+        }
+        if (!hasMicPermission) {
+            pendingMicStart = true
+            return
+        }
+
+        val languageId = _uiState.value.voiceLanguageId
+        val languageTag = _uiState.value.voiceLanguageTag
+        voiceOrchestrator.stopSpeaking()
+        _uiState.update { it.copy(isSpeaking = false, partialTranscript = null) }
+        val engine = voiceOrchestrator.startListening(languageId, languageTag, asrListener)
+        if (engine == null) {
             _uiState.update {
                 it.copy(
-                    messages = it.messages + hint,
-                    micState = VoiceMicState.IDLE,
+                    micState = VoiceMicState.ERROR,
+                    voiceErrorMessage = "No available speech engine",
                 )
             }
+        } else {
+            _uiState.update {
+                it.copy(
+                    micState = VoiceMicState.LISTENING,
+                    voiceEngine = engine,
+                    voiceErrorMessage = null,
+                )
+            }
+        }
+    }
+
+    private fun stopListening() {
+        _uiState.update { it.copy(micState = VoiceMicState.PROCESSING) }
+        voiceOrchestrator.stopListening()
+    }
+
+    private fun initializeVoiceState() {
+        val language = resolveDefaultLanguage()
+        val modelsReady = voiceOrchestrator.areModelsReady(language.id)
+        val canDownload = appConfig.voice.asr.models.any {
+            it.language.equals(language.id, ignoreCase = true) && it.url.isNotBlank()
+        } || appConfig.voice.tts.models.any {
+            it.language.equals(language.id, ignoreCase = true) && it.url.isNotBlank()
+        }
+        val readinessMessage = when {
+            language.id == "en" -> "English uses Android speech fallback in this demo."
+            modelsReady -> "Indic voice models are present for ${language.label}; Android fallback remains available."
+            canDownload -> "Indic voice models can be downloaded for ${language.label}."
+            else -> "Indic model URLs are not configured yet; Android speech fallback will be used when available."
+        }
+        _uiState.update {
+            it.copy(
+                voiceLanguageId = language.id,
+                voiceLanguageTag = language.bcp47,
+                voiceModelsReady = modelsReady,
+                voiceLanguageLabel = language.label,
+                canDownloadVoiceModels = canDownload,
+                voiceReadinessMessage = readinessMessage,
+            )
+        }
+    }
+
+    private fun resolveDefaultLanguage(): VoiceLanguage {
+        val configured = appConfig.voice.defaultLanguage
+        val languages = appConfig.voice.languages
+        return languages.firstOrNull { it.id == configured }
+            ?: languages.firstOrNull()
+            ?: VoiceLanguage(id = "en", label = "English", bcp47 = "en-US")
+    }
+
+    private fun speakLatestAssistantMessage() {
+        val lastAssistant = _uiState.value.messages.lastOrNull { !it.isUser } ?: return
+        if (lastAssistant.text.isBlank()) return
+        val languageId = _uiState.value.voiceLanguageId
+        val languageTag = _uiState.value.voiceLanguageTag
+        viewModelScope.launch {
+            voiceOrchestrator.speak(
+                text = lastAssistant.text,
+                languageId = languageId,
+                utteranceId = lastAssistant.id,
+                listener = ttsListener,
+                languageTag = languageTag,
+            )
         }
     }
 
@@ -183,6 +364,7 @@ class VoiceQueryViewModel(
 
     override fun onCleared() {
         chatEngine.close()
+        voiceOrchestrator.shutdown()
         super.onCleared()
     }
 }
@@ -190,11 +372,12 @@ class VoiceQueryViewModel(
 class VoiceQueryViewModelFactory(
     private val chatEngine: LlmChatEngine,
     private val appConfig: AppConfig,
+    private val voiceOrchestrator: VoiceOrchestrator,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(VoiceQueryViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return VoiceQueryViewModel(chatEngine, appConfig) as T
+            return VoiceQueryViewModel(chatEngine, appConfig, voiceOrchestrator) as T
         }
         error("Unknown ViewModel class")
     }

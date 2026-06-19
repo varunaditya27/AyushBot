@@ -22,6 +22,36 @@
     "systemPrompt": "You are AyushBot, an offline-first clinical decision support assistant for ASHA workers. Provide concise, protocol-aligned guidance. Always be safe and suggest referral when uncertain.",
     "cacheDir": "",
     "enableVision": false,
-    "enableAudio": false
+    "enableAudio": true
+  },
+  "voice": {
+    "enabled": true,
+    "offlineOnly": true,
+    "primaryEngine": "INDIC",
+    "fallbackEngine": "ANDROID",
+    "defaultLanguage": "en",
+    "sampleRateHz": 16000,
+    "modelBaseDir": "voice_models",
+    "languages": [
+      { "id": "en", "label": "English", "bcp47": "en-US" },
+      { "id": "hi", "label": "Hindi", "bcp47": "hi-IN" },
+      { "id": "kn", "label": "Kannada", "bcp47": "kn-IN" },
+      { "id": "te", "label": "Telugu", "bcp47": "te-IN" }
+    ],
+    "asr": {
+      "decoder": "ctc",
+      "models": [
+        { "language": "hi", "fileName": "asr_hi.onnx", "url": "" },
+        { "language": "kn", "fileName": "asr_kn.onnx", "url": "" },
+        { "language": "te", "fileName": "asr_te.onnx", "url": "" }
+      ]
+    },
+    "tts": {
+      "models": [
+        { "language": "hi", "fileName": "tts_hi.onnx", "url": "" },
+        { "language": "kn", "fileName": "tts_kn.onnx", "url": "" },
+        { "language": "te", "fileName": "tts_te.onnx", "url": "" }
+      ]
+    }
   }
 }
