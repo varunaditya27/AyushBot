@@ -68,7 +68,7 @@ class AppConfigLoader(private val context: Context) {
         val voice = VoiceConfig(
             enabled = voiceJson.optBoolean("enabled", true),
             offlineOnly = voiceJson.optBoolean("offlineOnly", true),
-            primaryEngine = parseEngine(voiceJson.optString("primaryEngine", "INDIC")),
+            primaryEngine = parseEngine(voiceJson.optString("primaryEngine", "ANDROID")),
             fallbackEngine = parseEngine(voiceJson.optString("fallbackEngine", "ANDROID")),
             defaultLanguage = voiceJson.optString("defaultLanguage", "en"),
             sampleRateHz = voiceJson.optInt("sampleRateHz", 16000),

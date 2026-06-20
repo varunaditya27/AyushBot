@@ -45,7 +45,7 @@ data class AppConfig(
             voice = VoiceConfig(
                 enabled = true,
                 offlineOnly = true,
-                primaryEngine = VoiceEngineType.INDIC,
+                primaryEngine = VoiceEngineType.ANDROID,
                 fallbackEngine = VoiceEngineType.ANDROID,
                 defaultLanguage = "en",
                 sampleRateHz = 16000,

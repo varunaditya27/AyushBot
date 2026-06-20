@@ -42,6 +42,7 @@ class VoiceOrchestrator(
         utteranceId: String,
         listener: TtsListener,
         languageTag: String? = null,
+        queueAdd: Boolean = false,
     ): VoiceEngineType? {
         if (!config.enabled) return null
         val selected = resolveTts(languageId) ?: return null
@@ -51,7 +52,7 @@ class VoiceOrchestrator(
         } else {
             languageId
         }
-        val success = selected.controller.speak(text, controllerLanguage, utteranceId, listener)
+        val success = selected.controller.speak(text, controllerLanguage, utteranceId, listener, queueAdd)
         return if (success) selected.type else fallbackTts(
             text = text,
             languageId = languageId,
@@ -59,6 +60,7 @@ class VoiceOrchestrator(
             listener = listener,
             failedType = selected.type,
             languageTag = languageTag,
+            queueAdd = queueAdd,
         )
     }
 
@@ -88,6 +90,7 @@ class VoiceOrchestrator(
         listener: TtsListener,
         failedType: VoiceEngineType,
         languageTag: String? = null,
+        queueAdd: Boolean = false,
     ): VoiceEngineType? {
         val fallbackType = config.fallbackEngine
         if (fallbackType == failedType) return null
@@ -102,7 +105,7 @@ class VoiceOrchestrator(
         } else {
             languageId
         }
-        val success = fallbackController.speak(text, controllerLanguage, utteranceId, listener)
+        val success = fallbackController.speak(text, controllerLanguage, utteranceId, listener, queueAdd)
         return if (success) fallbackType else null
     }
 

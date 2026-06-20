@@ -28,9 +28,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.AssistChip
@@ -82,6 +82,7 @@ fun VoiceQueryScreen(
             chatEngine = appContainer.llmChatEngine,
             appConfig = appContainer.appConfig,
             voiceOrchestrator = appContainer.voiceOrchestrator,
+            voiceTurnDao = appContainer.database.voiceTurnDao(),
         ),
     )
     val uiState by viewModel.uiState.collectAsState()
@@ -474,7 +475,7 @@ private fun ChatBubble(message: ChatMessage) {
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
                             Icon(
-                                Icons.Rounded.MenuBook,
+                                Icons.AutoMirrored.Rounded.MenuBook,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(14.dp),

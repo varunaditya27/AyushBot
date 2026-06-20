@@ -1,9 +1,8 @@
 package com.ayushbot.app.voice.model
 
 import android.content.Context
-import com.ayushbot.app.core.config.AsrConfig
-import com.ayushbot.app.core.config.TtsConfig
 import com.ayushbot.app.core.config.VoiceConfig
+import com.ayushbot.app.core.config.VoiceModelConfig
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
@@ -134,10 +133,10 @@ class VoiceModelManager(
 
     private fun modelConfig(type: VoiceModelType, languageId: String): VoiceModelConfig? {
         val models = when (type) {
-            VoiceModelType.ASR -> voiceConfig.asr
-            VoiceModelType.TTS -> voiceConfig.tts
+            VoiceModelType.ASR -> voiceConfig.asr.models
+            VoiceModelType.TTS -> voiceConfig.tts.models
         }
-        return models.models.firstOrNull { it.language.equals(languageId, ignoreCase = true) }
+        return models.firstOrNull { it.language.equals(languageId, ignoreCase = true) }
     }
 
     private fun sha256(file: File): String {

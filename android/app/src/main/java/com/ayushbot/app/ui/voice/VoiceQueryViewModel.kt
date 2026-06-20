@@ -12,6 +12,9 @@ import com.ayushbot.app.voice.VoiceOrchestrator
 import com.ayushbot.app.voice.asr.AsrListener
 import com.ayushbot.app.voice.tts.TtsListener
 import com.ayushbot.app.core.config.VoiceLanguage
+import com.ayushbot.app.data.local.dao.VoiceTurnDao
+import com.ayushbot.app.data.local.entity.VoiceTurnEntity
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -63,10 +66,12 @@ class VoiceQueryViewModel(
     private val chatEngine: LlmChatEngine,
     private val appConfig: AppConfig,
     private val voiceOrchestrator: VoiceOrchestrator,
+    private val voiceTurnDao: VoiceTurnDao,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(VoiceQueryUiState())
     val uiState: StateFlow<VoiceQueryUiState> = _uiState.asStateFlow()
     private var pendingMicStart = false
+    private var generationJob: Job? = null
 
     private val asrListener = object : AsrListener {
         override fun onPartial(text: String) {
@@ -75,7 +80,8 @@ class VoiceQueryViewModel(
 
         override fun onFinal(text: String) {
             _uiState.update { it.copy(partialTranscript = null) }
-            submitText(text)
+            val engine = _uiState.value.voiceEngine
+            submitText(text, inputMode = "VOICE", engineUsed = engine)
         }
 
         override fun onError(message: String) {
@@ -142,7 +148,8 @@ class VoiceQueryViewModel(
 
     fun stopSpeaking() {
         voiceOrchestrator.stopSpeaking()
-        _uiState.update { it.copy(isSpeaking = false) }
+        generationJob?.cancel()
+        _uiState.update { it.copy(isSpeaking = false, isProcessing = false, micState = VoiceMicState.IDLE) }
     }
 
     fun downloadVoiceModels() {
@@ -183,7 +190,11 @@ class VoiceQueryViewModel(
         warmUpLlm()
     }
 
-    fun submitText(prompt: String) {
+    fun submitText(
+        prompt: String,
+        inputMode: String = "TEXT",
+        engineUsed: VoiceEngineType? = null,
+    ) {
         if (prompt.isBlank() || _uiState.value.isProcessing) return
 
         if (!chatEngine.modelExists()) {
@@ -215,13 +226,23 @@ class VoiceQueryViewModel(
             )
         }
 
-        viewModelScope.launch {
+        generationJob?.cancel()
+        generationJob = viewModelScope.launch {
+            val startTime = System.currentTimeMillis()
+            var assistantText = ""
+            var errorMsg: String? = null
+            var spokenOffset = 0
+            var hasSpokenFirstChunk = false
+            val languageId = _uiState.value.voiceLanguageId
+            val languageTag = _uiState.value.voiceLanguageTag
+
             try {
                 _uiState.update { it.copy(llmStatus = LlmStatus.Loading) }
                 chatEngine.initialize()
                 _uiState.update { it.copy(llmStatus = LlmStatus.Ready) }
 
                 chatEngine.streamReply(prompt).collect { chunk ->
+                    assistantText += chunk
                     _uiState.update { state ->
                         state.copy(messages = state.messages.map { message ->
                             if (message.id == assistantId) {
@@ -231,8 +252,46 @@ class VoiceQueryViewModel(
                             }
                         })
                     }
+
+                    val pendingText = assistantText.substring(spokenOffset)
+                    val boundaryIdx = findSentenceBoundaryIndex(pendingText)
+                    if (boundaryIdx >= 0) {
+                        val textToSpeak = pendingText.substring(0, boundaryIdx + 1).trim()
+                        if (textToSpeak.isNotEmpty()) {
+                            val chunkUtteranceId = UUID.randomUUID().toString()
+                            voiceOrchestrator.speak(
+                                text = textToSpeak,
+                                languageId = languageId,
+                                utteranceId = chunkUtteranceId,
+                                listener = ttsListener,
+                                languageTag = languageTag,
+                                queueAdd = hasSpokenFirstChunk
+                            )
+                            hasSpokenFirstChunk = true
+                        }
+                        spokenOffset += (boundaryIdx + 1)
+                    }
                 }
+
+                // Collect remaining text after stream completes
+                val remainingText = assistantText.substring(spokenOffset).trim()
+                if (remainingText.isNotEmpty()) {
+                    val chunkUtteranceId = UUID.randomUUID().toString()
+                    voiceOrchestrator.speak(
+                        text = remainingText,
+                        languageId = languageId,
+                        utteranceId = chunkUtteranceId,
+                        listener = ttsListener,
+                        languageTag = languageTag,
+                        queueAdd = hasSpokenFirstChunk
+                    )
+                }
+
             } catch (throwable: Throwable) {
+                if (throwable is kotlinx.coroutines.CancellationException) {
+                    throw throwable
+                }
+                errorMsg = throwable.message
                 _uiState.update {
                     it.copy(
                         llmStatus = LlmStatus.Error(throwable.message ?: "LLM error"),
@@ -241,9 +300,41 @@ class VoiceQueryViewModel(
                 }
             } finally {
                 _uiState.update { it.copy(isProcessing = false, micState = VoiceMicState.IDLE) }
-                speakLatestAssistantMessage()
+
+                val voiceTurn = VoiceTurnEntity(
+                    id = UUID.randomUUID().toString(),
+                    inputText = prompt,
+                    assistantText = assistantText,
+                    inputMode = inputMode,
+                    engineUsed = engineUsed?.name,
+                    languageId = _uiState.value.voiceLanguageId,
+                    languageTag = _uiState.value.voiceLanguageTag,
+                    errorMessage = errorMsg,
+                    createdAt = startTime,
+                    completedAt = System.currentTimeMillis(),
+                )
+                runCatching {
+                    voiceTurnDao.insert(voiceTurn)
+                }
             }
         }
+    }
+
+    private fun findSentenceBoundaryIndex(text: String): Int {
+        val boundaries = charArrayOf('.', '?', '!', '\n')
+        var lastIdx = -1
+        for (i in text.indices) {
+            if (text[i] in boundaries) {
+                lastIdx = i
+            }
+        }
+        if (lastIdx == -1 && text.length > 100) {
+            val lastSpace = text.lastIndexOf(' ')
+            if (lastSpace > 50) {
+                return lastSpace
+            }
+        }
+        return lastIdx
     }
 
     private fun startListening(hasMicPermission: Boolean) {
@@ -373,11 +464,12 @@ class VoiceQueryViewModelFactory(
     private val chatEngine: LlmChatEngine,
     private val appConfig: AppConfig,
     private val voiceOrchestrator: VoiceOrchestrator,
+    private val voiceTurnDao: VoiceTurnDao,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(VoiceQueryViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return VoiceQueryViewModel(chatEngine, appConfig, voiceOrchestrator) as T
+            return VoiceQueryViewModel(chatEngine, appConfig, voiceOrchestrator, voiceTurnDao) as T
         }
         error("Unknown ViewModel class")
     }

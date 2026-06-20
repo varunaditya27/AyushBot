@@ -2,11 +2,17 @@ package com.ayushbot.app.voice.asr
 
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import java.util.Locale
+
+// ═══════════════════════════════════════════════════════════════
+// AndroidSpeechRecognizerController — uses the native Android
+// SpeechRecognizer API (on-device when offlineOnly=true, API 31+).
+// Properly guards all SDK_INT checks to avoid crashes on older devices.
+// ═══════════════════════════════════════════════════════════════
 
 class AndroidSpeechRecognizerController(
     private val context: Context,
@@ -18,12 +24,9 @@ class AndroidSpeechRecognizerController(
 
     override fun startListening(languageId: String, listener: AsrListener): Boolean {
         if (!isAvailable(languageId)) return false
+
         if (speechRecognizer == null) {
-            speechRecognizer = if (offlineOnly && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
-                SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
-            } else {
-                SpeechRecognizer.createSpeechRecognizer(context)
-            }
+            speechRecognizer = createRecognizer()
             speechRecognizer?.setRecognitionListener(object : RecognitionListener {
                 override fun onReadyForSpeech(params: Bundle?) = Unit
                 override fun onBeginningOfSpeech() = Unit
@@ -84,7 +87,15 @@ class AndroidSpeechRecognizerController(
 
     override fun isAvailable(languageId: String): Boolean {
         if (!SpeechRecognizer.isRecognitionAvailable(context)) return false
-        if (offlineOnly && !SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) return false
+        // isOnDeviceRecognitionAvailable requires API 31 (Android 12)
+        if (offlineOnly) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (!SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) return false
+            } else {
+                // On older devices, on-device recognition is not supported — fall back gracefully
+                return false
+            }
+        }
         return true
     }
 
@@ -92,6 +103,16 @@ class AndroidSpeechRecognizerController(
         isListening = false
         speechRecognizer?.destroy()
         speechRecognizer = null
+    }
+
+    private fun createRecognizer(): SpeechRecognizer {
+        return if (offlineOnly && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+        ) {
+            SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+        } else {
+            SpeechRecognizer.createSpeechRecognizer(context)
+        }
     }
 
     private fun errorMessage(error: Int): String {
@@ -107,7 +128,7 @@ class AndroidSpeechRecognizerController(
             SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech input"
             SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED -> "Language not supported"
             SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> "Language unavailable"
-            else -> "Speech recognition error"
+            else -> "Speech recognition error ($error)"
         }
     }
 }

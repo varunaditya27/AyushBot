@@ -73,3 +73,21 @@ data class FacilityEntity(
     val distanceKm: Float,
     val hasAmbulance: Boolean = false,
 )
+
+/**
+ * VoiceTurnEntity — locally persisted query/response turns from Voice Query.
+ * This keeps the ASHA-facing transcript auditable even when sync is unavailable.
+ */
+@Entity(tableName = "voice_turns")
+data class VoiceTurnEntity(
+    @PrimaryKey val id: String,
+    val inputText: String,
+    val assistantText: String,
+    val inputMode: String, // VOICE or TEXT
+    val engineUsed: String?,
+    val languageId: String,
+    val languageTag: String,
+    val errorMessage: String? = null,
+    val createdAt: Long = System.currentTimeMillis(),
+    val completedAt: Long? = null,
+)

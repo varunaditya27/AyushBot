@@ -3,12 +3,11 @@ package com.ayushbot.app.llm
 import android.content.Context
 import com.ayushbot.app.core.config.LlmConfig
 import com.google.ai.edge.litertlm.Backend
-import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
-import com.google.ai.edge.litertlm.LogSeverity
+import com.google.ai.edge.litertlm.Message
 import com.google.ai.edge.litertlm.SamplerConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -40,7 +39,6 @@ class LiteRtLmChatEngine(
         withContext(Dispatchers.IO) {
             lock.withLock {
                 if (isInitialized()) return@withLock
-                Engine.setNativeMinLogSeverity(LogSeverity.ERROR)
 
                 val cacheDir = config.cacheDir.ifBlank { context.cacheDir.absolutePath }
                 val backend = config.backend.toBackend(context)
@@ -62,9 +60,11 @@ class LiteRtLmChatEngine(
     }
 
     override fun streamReply(prompt: String): Flow<String> = flow {
-        initialize()
+        if (!isInitialized()) {
+            initialize()
+        }
         val conversationInstance = getOrCreateConversation()
-        conversationInstance.sendMessageAsync(prompt).collect { message ->
+        conversationInstance.sendMessageAsync(Message.of(prompt)).collect { message ->
             emit(message.toString())
         }
     }
@@ -87,10 +87,10 @@ class LiteRtLmChatEngine(
         )
 
         val conversationConfig = ConversationConfig(
-            systemInstruction = if (config.systemPrompt.isBlank()) {
+            systemMessage = if (config.systemPrompt.isBlank()) {
                 null
             } else {
-                Contents.of(config.systemPrompt)
+                Message.of(config.systemPrompt)
             },
             samplerConfig = samplerConfig,
         )
@@ -102,9 +102,9 @@ class LiteRtLmChatEngine(
 
     private fun String.toBackend(context: Context): Backend {
         return when (uppercase()) {
-            "GPU" -> Backend.GPU()
-            "NPU" -> Backend.NPU(context.applicationInfo.nativeLibraryDir)
-            else -> Backend.CPU()
+            "GPU" -> Backend.GPU
+            "NPU" -> Backend.NPU
+            else -> Backend.CPU
         }
     }
 }

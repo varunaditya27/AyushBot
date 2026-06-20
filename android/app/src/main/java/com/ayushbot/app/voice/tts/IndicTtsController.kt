@@ -13,6 +13,7 @@ class IndicTtsController(
         languageId: String,
         utteranceId: String,
         listener: TtsListener,
+        queueAdd: Boolean,
     ): Boolean {
         if (!isAvailable(languageId)) {
             listener.onError(utteranceId, "Indic-TTS model missing for $languageId")

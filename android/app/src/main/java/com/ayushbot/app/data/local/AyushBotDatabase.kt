@@ -8,10 +8,12 @@ import com.ayushbot.app.data.local.dao.CaseDao
 import com.ayushbot.app.data.local.dao.FacilityDao
 import com.ayushbot.app.data.local.dao.PatientDao
 import com.ayushbot.app.data.local.dao.RecommendationDao
+import com.ayushbot.app.data.local.dao.VoiceTurnDao
 import com.ayushbot.app.data.local.entity.CaseEntity
 import com.ayushbot.app.data.local.entity.FacilityEntity
 import com.ayushbot.app.data.local.entity.PatientEntity
 import com.ayushbot.app.data.local.entity.RecommendationEntity
+import com.ayushbot.app.data.local.entity.VoiceTurnEntity
 
 @Database(
     entities = [
@@ -19,14 +21,17 @@ import com.ayushbot.app.data.local.entity.RecommendationEntity
         CaseEntity::class,
         RecommendationEntity::class,
         FacilityEntity::class,
+        VoiceTurnEntity::class,
     ],
     version = 1,
+    exportSchema = false,
 )
 abstract class AyushBotDatabase : RoomDatabase() {
     abstract fun patientDao(): PatientDao
     abstract fun caseDao(): CaseDao
     abstract fun recommendationDao(): RecommendationDao
     abstract fun facilityDao(): FacilityDao
+    abstract fun voiceTurnDao(): VoiceTurnDao
 
     companion object {
         @Volatile
@@ -38,7 +43,7 @@ abstract class AyushBotDatabase : RoomDatabase() {
                     context.applicationContext,
                     AyushBotDatabase::class.java,
                     "ayushbot.db",
-                ).fallbackToDestructiveMigration()
+                ).fallbackToDestructiveMigration(dropAllTables = true)
                     .build()
                     .also { instance = it }
             }
