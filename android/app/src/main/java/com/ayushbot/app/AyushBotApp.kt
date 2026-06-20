@@ -6,6 +6,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -17,15 +18,31 @@ import com.ayushbot.app.ui.components.AyushBottomBar
 import com.ayushbot.app.ui.components.BottomNavItem
 import com.ayushbot.app.ui.theme.AyushBotTheme
 
+private const val PREFS_NAME = "ayushbot_prefs"
+private const val KEY_ONBOARDING_DONE = "onboarding_done"
+
 // ═══════════════════════════════════════════════════════════════
 // AyushBotApp — Root composable.
 // Theme + Scaffold + Navigation + Bottom Bar
+// Onboarding shown only on first launch (via SharedPreferences).
 // ═══════════════════════════════════════════════════════════════
 
 @Composable
 fun AyushBotApp() {
     AyushBotTheme {
-        val appContainer = (LocalContext.current.applicationContext as AyushBotApplication).appContainer
+        val context = LocalContext.current
+        val appContainer = (context.applicationContext as AyushBotApplication).appContainer
+
+        // Determine start destination based on first-launch state
+        val startDestination = remember {
+            val prefs = context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
+            if (prefs.getBoolean(KEY_ONBOARDING_DONE, false)) {
+                Screen.Home.route
+            } else {
+                Screen.Onboarding.route
+            }
+        }
+
         val navController = rememberNavController()
         val backStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = backStackEntry?.destination?.route
@@ -63,7 +80,14 @@ fun AyushBotApp() {
             ) { innerPadding ->
                 AyushNavGraph(
                     navController = navController,
-                    startDestination = Screen.Home.route,
+                    startDestination = startDestination,
+                    onOnboardingComplete = {
+                        // Mark onboarding done so it won't show again
+                        context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
+                            .edit()
+                            .putBoolean(KEY_ONBOARDING_DONE, true)
+                            .apply()
+                    },
                     modifier = Modifier.padding(innerPadding),
                 )
             }

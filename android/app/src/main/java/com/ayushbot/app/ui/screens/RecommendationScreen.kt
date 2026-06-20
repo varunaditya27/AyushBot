@@ -16,9 +16,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Chat
+import androidx.compose.material.icons.automirrored.rounded.Chat
+import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
 import androidx.compose.material.icons.rounded.Description
-import androidx.compose.material.icons.rounded.FormatListBulleted
 import androidx.compose.material.icons.rounded.LocalHospital
 import androidx.compose.material.icons.rounded.Medication
 import androidx.compose.material.icons.rounded.Share
@@ -253,7 +253,7 @@ fun RecommendationScreen(
 
                             ActionPlanCard(
                                 title = "Counsel Caregiver",
-                                icon = Icons.Rounded.Chat,
+                                icon = Icons.AutoMirrored.Rounded.Chat,
                                 iconTint = StateDeepOrange,
                                 steps = data.counselSteps,
                             )
@@ -293,7 +293,7 @@ fun RecommendationScreen(
 
                             ActionPlanCard(
                                 title = "Other Possible Diagnoses",
-                                icon = Icons.Rounded.FormatListBulleted,
+                                icon = Icons.AutoMirrored.Rounded.FormatListBulleted,
                                 iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 steps = data.differentials.map {
                                     ActionPlanStep(title = it.first, detail = it.second)

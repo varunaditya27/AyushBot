@@ -11,6 +11,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -42,7 +44,7 @@ private val symptomList = listOf(
     // Respiratory
     SymptomItem("fast_breathing", "Fast Breathing", Icons.Rounded.Air, "Respiratory"),
     SymptomItem("chest_indrawing", "Chest Indrawing", Icons.Rounded.Compress, "Respiratory"),
-    SymptomItem("stridor", "Stridor at Rest", Icons.Rounded.VolumeUp, "Respiratory"),
+    SymptomItem("stridor", "Stridor at Rest", Icons.AutoMirrored.Rounded.VolumeUp, "Respiratory"),
     // Danger Signs
     SymptomItem("convulsions", "Convulsions", Icons.Rounded.ElectricBolt, "Danger Signs"),
     SymptomItem("unable_drink", "Unable to Drink", Icons.Rounded.WaterDrop, "Danger Signs"),
@@ -234,7 +236,7 @@ fun NewVisitScreen(
                         Text(if (currentStep == 2) "Submit" else "Continue")
                         Spacer(Modifier.width(spacing.sm))
                         Icon(
-                            if (currentStep == 2) Icons.Rounded.Send else Icons.AutoMirrored.Rounded.ArrowForward,
+                            if (currentStep == 2) Icons.AutoMirrored.Rounded.Send else Icons.AutoMirrored.Rounded.ArrowForward,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp),
                         )
