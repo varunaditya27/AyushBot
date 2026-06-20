@@ -148,6 +148,37 @@ UI explicitly surfaces connectivity context:
 
 ---
 
+## 🧠 On-Device LLM Demo (Gemma 3n)
+
+The Android app now supports **live on-device LLM inference** using **LiteRT-LM** and the
+Gemma 3n `.litertlm` model. This is used in the **Voice Query** screen for the demo flow.
+
+### 1) Place the model on the device
+
+The model is **too large to bundle inside the APK**, so it must be placed on-device
+and referenced by a file path in `app_config.json`:
+
+- Default path: `/data/local/tmp/llm/gemma-3n-E4B-it-int4.litertlm`
+
+### 2) Configure the app
+
+Edit `app/src/main/assets/app_config.json`:
+
+- `mock.useMockLlm`: set to `false` for live LLM inference
+- `llm.modelPath`: path to the `.litertlm` file on the device
+- `llm.backend`: `CPU` / `GPU` / `NPU`
+
+The app shows **LLM status** in the Voice Query top bar.
+
+### 3) Demo mode vs backend-ready
+
+- `mock.useMockBackend = true` → fully local mock data (demo-ready)
+- `mock.useMockBackend = false` → use backend API (Retrofit stubs in place)
+
+This toggle lets the app run fully offline now, and switch to backend sync later.
+
+---
+
 ## 🛠️ Build & Test
 
 From `android/`:

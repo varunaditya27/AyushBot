@@ -16,6 +16,7 @@ import com.ayushbot.app.ui.screens.*
 fun AyushNavGraph(
     navController: NavHostController,
     startDestination: String = Screen.Home.route,
+    onOnboardingComplete: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     NavHost(
@@ -27,6 +28,7 @@ fun AyushNavGraph(
         composable(Screen.Onboarding.route) {
             OnboardingScreen(
                 onComplete = {
+                    onOnboardingComplete()
                     navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.Onboarding.route) { inclusive = true }
                     }

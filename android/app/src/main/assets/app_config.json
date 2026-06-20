@@ -1,0 +1,57 @@
+{
+  "demoMode": true,
+  "mock": {
+    "useMockBackend": true,
+    "useMockSensors": true,
+    "useMockLlm": false
+  },
+  "backend": {
+    "baseUrl": "http://10.0.2.2:8000/",
+    "mqttBrokerUrl": "ssl://10.0.2.2:8883",
+    "mqttClientId": "ayushbot-android",
+    "mqttUsername": "",
+    "mqttPassword": ""
+  },
+  "llm": {
+    "modelPath": "/data/local/tmp/llm/gemma-3n-E4B-it-int4.litertlm",
+    "backend": "GPU",
+    "maxTokens": 1024,
+    "topK": 40,
+    "topP": 0.95,
+    "temperature": 0.8,
+    "systemPrompt": "You are AyushBot, a clinical decision support assistant for ASHA workers in India, operating strictly under the IMCI and iCCM frameworks. Help the ASHA worker assess, classify, and treat childhood illnesses. Do NOT default to suggesting physician referral for every query. For mild cases without danger signs, guide the ASHA worker on home treatment, such as Plan A ORS and Zinc dosages, or oral Amoxicillin for non-severe pneumonia, and home care instructions. Only recommend urgent referral to a Primary Health Center when clear severe signs are present: general danger signs (inability to feed, vomiting everything, convulsions, lethargy), chest indrawing, stridor, or severe dehydration. When referring, always state the critical pre-referral actions the ASHA worker must perform first, like giving the first dose of antibiotics, preventing low blood sugar, keeping the child warm, and preparing the slip. Provide extremely concise, direct, no-nonsense advice. Absolutely NO markdown formatting, NO bolding, NO headers, and NO bullet points. Output only plain conversational text.",
+    "cacheDir": "",
+    "enableVision": false,
+    "enableAudio": false
+  },
+  "voice": {
+    "enabled": true,
+    "offlineOnly": false,
+    "primaryEngine": "ANDROID",
+    "fallbackEngine": "ANDROID",
+    "defaultLanguage": "en",
+    "sampleRateHz": 16000,
+    "modelBaseDir": "voice_models",
+    "languages": [
+      { "id": "en", "label": "English", "bcp47": "en-US" },
+      { "id": "hi", "label": "Hindi", "bcp47": "hi-IN" },
+      { "id": "kn", "label": "Kannada", "bcp47": "kn-IN" },
+      { "id": "te", "label": "Telugu", "bcp47": "te-IN" }
+    ],
+    "asr": {
+      "decoder": "ctc",
+      "models": [
+        { "language": "hi", "fileName": "asr_hi.onnx", "url": "" },
+        { "language": "kn", "fileName": "asr_kn.onnx", "url": "" },
+        { "language": "te", "fileName": "asr_te.onnx", "url": "" }
+      ]
+    },
+    "tts": {
+      "models": [
+        { "language": "hi", "fileName": "tts_hi.onnx", "url": "" },
+        { "language": "kn", "fileName": "tts_kn.onnx", "url": "" },
+        { "language": "te", "fileName": "tts_te.onnx", "url": "" }
+      ]
+    }
+  }
+}
