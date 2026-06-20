@@ -159,6 +159,14 @@ The model is **too large to bundle inside the APK**, so it must be placed on-dev
 and referenced by a file path in `app_config.json`:
 
 - Default path: `/data/local/tmp/llm/gemma-3n-E4B-it-int4.litertlm`
+- Local workspace copy: `android/gemma-3n-E4B-it-int4.litertlm`
+
+For a connected emulator/device, push the existing local file to the configured path:
+
+```bash
+adb shell mkdir -p /data/local/tmp/llm
+adb push gemma-3n-E4B-it-int4.litertlm /data/local/tmp/llm/gemma-3n-E4B-it-int4.litertlm
+```
 
 ### 2) Configure the app
 
@@ -170,12 +178,32 @@ Edit `app/src/main/assets/app_config.json`:
 
 The app shows **LLM status** in the Voice Query top bar.
 
+The LiteRT-LM Gradle dependency is pinned in `gradle/libs.versions.toml` instead of using `latest.release`, because newer LiteRT-LM artifacts may require a newer Kotlin compiler than this Android project currently uses.
+
 ### 3) Demo mode vs backend-ready
 
 - `mock.useMockBackend = true` → fully local mock data (demo-ready)
 - `mock.useMockBackend = false` → use backend API (Retrofit stubs in place)
 
 This toggle lets the app run fully offline now, and switch to backend sync later.
+
+---
+
+## 🎙️ Voice Pipeline Demo
+
+Voice is configured in `app/src/main/assets/app_config.json` under the `voice` key.
+
+Current defaults:
+
+- `primaryEngine = "INDIC"`
+- `fallbackEngine = "ANDROID"`
+- `offlineOnly = true`
+- `sampleRateHz = 16000`
+- languages: English, Hindi, Kannada, Telugu
+
+The app currently ships a working Android speech fallback path plus model-management scaffolding for Indic engines. English intentionally uses Android STT/TTS fallback unless a dedicated English model is added. Hindi/Kannada/Telugu have Indic model slots configured, but their URLs are blank until validated model artifacts are chosen.
+
+IndicConformer ASR and Indic-TTS classes are present but gated: live inference remains disabled until real ONNX/TFLite artifacts and runtime dependencies are added. This prevents placeholder model files from routing into a known-failing inference path.
 
 ---
 
