@@ -1,4 +1,3 @@
-def test_simulation_smoke():
 from __future__ import annotations
 
 import pytest
@@ -6,4 +5,4 @@ import pytest
 
 @pytest.mark.simulation
 def test_simulation_smoke():
-    assert True
+	assert True

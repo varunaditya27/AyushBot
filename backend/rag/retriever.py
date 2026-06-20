@@ -4,91 +4,70 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
-import faiss
 import numpy as np
-import onnxruntime as ort
-import yaml
-from tokenizers import Tokenizer
+
+from backend.config import load_settings
+
+if TYPE_CHECKING:
+	from tokenizers import Tokenizer
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class RetrieverConfig:
+    enabled: bool
     index_dir: str
     model_dir: str
+    embedding_model_id: str
     top_k: int
+    dense_top_k: int
     min_score: float
+    faiss_ef_search: int
     max_length: int
     intra_op_threads: int
     inter_op_threads: int
 
 
-def _load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
-    path = (
-        config_path
-        or os.getenv("AYUSHBOT_CONFIG")
-        or os.path.join(os.path.dirname(__file__), "..", "config.yaml")
-    )
-    path = os.path.abspath(path)
-    if not os.path.exists(path):
-        logger.warning("Config file not found at %s; using defaults", path)
-        return {}
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            return yaml.safe_load(handle) or {}
-    except Exception as exc:  # pragma: no cover
-        logger.error("Failed to load config: %s", exc)
-        return {}
-
-
 def _build_config(config_path: Optional[str] = None) -> RetrieverConfig:
-    config = _load_config(config_path)
-    rag_cfg = config.get("rag", {}) if isinstance(config, dict) else {}
-    index_dir = os.getenv("AYUSHBOT_RAG_INDEX_DIR", rag_cfg.get("index_dir", "rag/index"))
-    model_dir = os.getenv(
-        "AYUSHBOT_RAG_MODEL_DIR", rag_cfg.get("biencoder_model", "all-MiniLM-L6-v2")
-    )
-    top_k = int(os.getenv("AYUSHBOT_RAG_TOP_K", rag_cfg.get("retriever_top_k_fused", 20)))
-    min_score = float(
-        os.getenv("AYUSHBOT_RAG_MIN_SCORE", rag_cfg.get("reranker_min_score", 0.3))
-    )
-    max_length = int(os.getenv("AYUSHBOT_RAG_MAX_LENGTH", rag_cfg.get("max_length", 256)))
-    intra = int(os.getenv("AYUSHBOT_RAG_INTRA_THREADS", rag_cfg.get("intra_op_threads", 1)))
-    inter = int(os.getenv("AYUSHBOT_RAG_INTER_THREADS", rag_cfg.get("inter_op_threads", 1)))
+    rag_cfg = load_settings(config_path).rag
     return RetrieverConfig(
-        index_dir=os.path.abspath(index_dir),
-        model_dir=os.path.abspath(model_dir),
-        top_k=top_k,
-        min_score=min_score,
-        max_length=max_length,
-        intra_op_threads=intra,
-        inter_op_threads=inter,
+        enabled=rag_cfg.enabled,
+        index_dir=str(rag_cfg.index_dir),
+        model_dir=str(rag_cfg.model_dir),
+        embedding_model_id=rag_cfg.embedding_model_id,
+        top_k=rag_cfg.retriever_top_k_fused,
+        dense_top_k=rag_cfg.dense_top_k,
+        min_score=rag_cfg.reranker_min_score,
+        faiss_ef_search=rag_cfg.faiss_ef_search,
+        max_length=rag_cfg.max_length,
+        intra_op_threads=rag_cfg.intra_op_threads,
+        inter_op_threads=rag_cfg.inter_op_threads,
     )
 
 
 def _resolve_tokenizer_path(model_dir: str) -> str:
-    candidate = os.path.join(model_dir, "tokenizer.json")
-    if not os.path.exists(candidate):
+    candidate = Path(model_dir) / "tokenizer.json"
+    if not candidate.exists():
         raise FileNotFoundError(f"tokenizer.json not found in {model_dir}")
-    return candidate
+    return str(candidate)
 
 
 def _resolve_onnx_path(model_dir: str) -> str:
-    candidate = os.path.join(model_dir, "model.onnx")
-    if not os.path.exists(candidate):
+    candidate = Path(model_dir) / "model.onnx"
+    if not candidate.exists():
         raise FileNotFoundError(f"model.onnx not found in {model_dir}")
-    return candidate
+    return str(candidate)
 
 
 def _load_metadata(index_dir: str) -> List[Dict[str, Any]]:
-    jsonl_path = os.path.join(index_dir, "metadata.jsonl")
-    json_path = os.path.join(index_dir, "metadata.json")
-    if os.path.exists(jsonl_path):
+    jsonl_path = Path(index_dir) / "metadata.jsonl"
+    json_path = Path(index_dir) / "metadata.json"
+    if jsonl_path.exists():
         records: List[Dict[str, Any]] = []
         with open(jsonl_path, "r", encoding="utf-8") as handle:
             for line in handle:
@@ -97,7 +76,7 @@ def _load_metadata(index_dir: str) -> List[Dict[str, Any]]:
                     continue
                 records.append(json.loads(line))
         return records
-    if os.path.exists(json_path):
+    if json_path.exists():
         with open(json_path, "r", encoding="utf-8") as handle:
             data = json.load(handle)
             if isinstance(data, list):
@@ -113,9 +92,16 @@ class OnnxEmbedder:
         intra_op_threads: int = 1,
         inter_op_threads: int = 1,
     ) -> None:
+        try:
+            import onnxruntime as ort
+            from tokenizers import Tokenizer
+        except ImportError as exc:
+            raise RuntimeError(
+                "onnxruntime and tokenizers are required for model-backed RAG"
+            ) from exc
         tokenizer_path = _resolve_tokenizer_path(model_dir)
         onnx_path = _resolve_onnx_path(model_dir)
-        self._tokenizer = Tokenizer.from_file(tokenizer_path)
+        self._tokenizer: "Tokenizer" = Tokenizer.from_file(tokenizer_path)
         self.max_length = max_length
 
         sess_options = ort.SessionOptions()
@@ -154,6 +140,10 @@ class OnnxEmbedder:
         )
 
     def embed(self, text: str) -> np.ndarray:
+        try:
+            import faiss
+        except ImportError as exc:
+            raise RuntimeError("faiss-cpu is required for model-backed RAG") from exc
         input_ids, attention_mask, token_type_ids = self._tokenize(text)
         inputs: Dict[str, np.ndarray] = {}
         if "input_ids" in self._input_names:
@@ -181,11 +171,18 @@ class FaissRetriever:
         embedder: OnnxEmbedder,
         top_k: int = 20,
         min_score: float = 0.3,
+        ef_search: int = 128,
     ) -> None:
-        index_path = os.path.join(index_dir, "faiss.index")
-        if not os.path.exists(index_path):
+        index_path = Path(index_dir) / "faiss.index"
+        if not index_path.exists():
             raise FileNotFoundError(f"FAISS index not found at {index_path}")
-        self._index = faiss.read_index(index_path)
+        try:
+            import faiss
+        except ImportError as exc:
+            raise RuntimeError("faiss-cpu is required for model-backed RAG") from exc
+        self._index = faiss.read_index(str(index_path))
+        if hasattr(self._index, "hnsw"):
+            self._index.hnsw.efSearch = ef_search
         self._metadata = _load_metadata(index_dir)
         self._embedder = embedder
         self._top_k = top_k
@@ -220,12 +217,55 @@ class FaissRetriever:
         return {"results": results, "guardrail_triggered": guardrail_triggered}
 
 
-def create_retriever(config_path: Optional[str] = None) -> FaissRetriever:
+class DisabledRetriever:
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+
+    def query(self, _text: str, top_k: Optional[int] = None) -> Dict[str, Any]:
+        return {
+            "results": [],
+            "guardrail_triggered": True,
+            "disabled": True,
+            "reason": self.reason,
+        }
+
+
+def _missing_artifact_reason(cfg: RetrieverConfig) -> str | None:
+    index_dir = Path(cfg.index_dir)
+    model_dir = Path(cfg.model_dir)
+    if not (index_dir / "faiss.index").is_file():
+        return f"FAISS index not found at {index_dir / 'faiss.index'}"
+    if not ((index_dir / "metadata.json").is_file() or (index_dir / "metadata.jsonl").is_file()):
+        return f"RAG metadata not found in {index_dir}"
+    if not (model_dir / "model.onnx").is_file():
+        return f"ONNX model not found at {model_dir / 'model.onnx'}"
+    if not (model_dir / "tokenizer.json").is_file():
+        return f"Tokenizer not found at {model_dir / 'tokenizer.json'}"
+    return None
+
+
+def create_retriever(config_path: Optional[str] = None) -> FaissRetriever | DisabledRetriever:
     cfg = _build_config(config_path)
-    embedder = OnnxEmbedder(
-        cfg.model_dir,
-        max_length=cfg.max_length,
-        intra_op_threads=cfg.intra_op_threads,
-        inter_op_threads=cfg.inter_op_threads,
-    )
-    return FaissRetriever(cfg.index_dir, embedder, top_k=cfg.top_k, min_score=cfg.min_score)
+    if not cfg.enabled:
+        return DisabledRetriever("RAG is disabled in configuration")
+    missing = _missing_artifact_reason(cfg)
+    if missing:
+        logger.warning("RAG disabled: %s", missing)
+        return DisabledRetriever(missing)
+    try:
+        embedder = OnnxEmbedder(
+            cfg.model_dir,
+            max_length=cfg.max_length,
+            intra_op_threads=cfg.intra_op_threads,
+            inter_op_threads=cfg.inter_op_threads,
+        )
+        return FaissRetriever(
+            cfg.index_dir,
+            embedder,
+            top_k=cfg.top_k,
+            min_score=cfg.min_score,
+            ef_search=cfg.faiss_ef_search,
+        )
+    except Exception as exc:
+        logger.warning("RAG disabled: %s", exc)
+        return DisabledRetriever(str(exc))

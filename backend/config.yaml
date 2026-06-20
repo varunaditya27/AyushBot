@@ -1,88 +1,119 @@
-# =============================================================================
-# AyushBot Backend — Master Configuration File
-# =============================================================================
-#
-# PURPOSE:
-#   Central YAML configuration for all backend subsystems. Loaded once at
-#   startup by api/main.py. Environment-specific values (dev vs. production)
-#   can be overridden via environment variables prefixed with AYUSHBOT_.
-#
-# SECTIONS:
-#
-# --- API Server ---
-# api:
-#   host: "0.0.0.0"                    # Bind address (all interfaces for local network)
-#   port: 8443                          # HTTPS port
-#   cors_origins: ["*"]                 # Allow all local network origins
-#   ssl_certfile: "security/certs/server.crt"
-#   ssl_keyfile: "security/certs/server.key"
-#   rate_limit_max_tokens: 10           # Token bucket capacity per client
-#   rate_limit_refill_rate: 2.0         # Tokens per second refill
-#
-# --- Database ---
-# database:
-#   path: "/opt/ayushbot/data/ayushbot.db"  # SQLite file path
-#   wal_mode: true                          # Write-Ahead Logging for concurrency
-#   journal_size_limit_mb: 50               # Prevent unbounded WAL growth
-#
-# --- RAG Pipeline ---
-# rag:
-#   index_dir: "rag/index/"                     # FAISS index + metadata location
-#   chunk_size: 300                              # Tokens per chunk
-#   chunk_overlap: 50                            # Overlap between chunks
-#   hnsw_m: 32                                   # HNSW bidirectional links
-#   hnsw_ef_construction: 200                    # Build-time search depth
-#   hnsw_ef_search: 128                          # Query-time search depth
-#   retriever_top_k_dense: 100                   # FAISS candidate count
-#   retriever_top_k_sparse: 100                  # BM25 candidate count
-#   retriever_top_k_fused: 20                    # Post-RRF candidate count
-#   reranker_top_k: 5                            # Final evidence chunk count
-#   reranker_min_score: 0.3                      # Minimum relevance threshold
-#   biencoder_model: "all-MiniLM-L6-v2"
-#   crossencoder_model: "ms-marco-MiniLM-L-6-v2"
-#
-# --- LLM ---
-# llm:
-#   model_path: "/opt/ayushbot/models/phi-3-mini-4bit.gguf"
-#   quantization: "Q4_K_M"                      # GGUF quantization level
-#   context_length: 2048                         # Max context window
-#   max_tokens: 300                              # Max generation length
-#   temperature: 0.1                             # Near-deterministic
-#   top_p: 0.9                                   # Nucleus sampling
-#   n_threads: 2                                 # CPU threads for inference
-#   fallback_model_path: "/opt/ayushbot/models/gemma-3-1b-4bit.gguf"
-#
-# --- Federated Learning ---
-# fl:
-#   server_address: "fl.ayushbot.cloud:8080"     # Cloud Flower server
-#   sync_interval_hours: 6                        # How often to attempt sync
-#   local_epochs: 5                               # SGD epochs per training round
-#   learning_rate: 0.01
-#   min_batch_size: 10                            # Minimum encounters before training
-#   dp_epsilon: 1.0                               # Per-round privacy budget
-#   dp_delta: 1.0e-6                              # DP failure probability
-#   dp_max_grad_norm: 1.0                         # Gradient clipping threshold
-#   dp_max_cumulative_epsilon: 8.0                # Lifetime privacy budget
-#   gossip_enabled: false                         # Peer-to-peer gradient sharing
-#   gossip_mixing_alpha: 0.3
-#   client_cert_path: "security/certs/client.crt"
-#   client_key_path: "security/certs/client.key"
-#   ca_cert_path: "security/certs/ca.crt"
-#
-# --- Language Agent ---
-# language:
-#   indicbert_model_path: "/opt/ayushbot/models/indicbert-ner"
-#   indictrans2_model_path: "/opt/ayushbot/models/indictrans2-en-indic"
-#   tts_model_path: "/opt/ayushbot/models/ai4bharat-tts"
-#   supported_languages: ["hi", "bn", "ta", "te", "kn", "mr", "gu", "pa"]
-#   default_language: "hi"
-#   medical_synonym_dict_path: "data/reference/medical_synonyms.json"
-#
-# --- Logging ---
-# logging:
-#   level: "INFO"                                 # DEBUG in development
-#   format: "json"                                # Structured JSON logging
-#   output: "stdout"                              # Also: file path for rotation
-#   rotation_mb: 50                               # Log file rotation size
-#   retention_days: 30                            # Log retention period
-# =============================================================================
+# Supported modes: development, test, production.
+# Development starts locally without production certs, JWT keys, Redis, or MQTT.
+environment: development
+
+api:
+  host: 127.0.0.1
+  port: 8000
+  cors_origins:
+    - http://localhost
+    - http://127.0.0.1
+  rate_limit_max_tokens: 20
+  rate_limit_refill_rate: 5.0
+  tls_cert_path: null
+  tls_key_path: null
+
+database:
+  path: var/ayushbot.db
+  wal_mode: true
+  journal_size_limit_mb: 50
+
+redis:
+  enabled: false
+  url: redis://127.0.0.1:6379/0
+
+mqtt:
+  enabled: false
+  host: 127.0.0.1
+  port: 1883
+  topic: ayushbot/telemetry/#
+  username: null
+  password: null
+  tls_enabled: false
+  ca_cert_path: null
+  client_cert_path: null
+  client_key_path: null
+
+triage_model:
+  enabled: true
+  path: models/triage_xgb.json
+  metadata_path: models/triage_xgb.metadata.json
+  rules_path: data/reference/pretriage_rules.json
+  growth_reference_path: data/reference/who_weight_for_age_lms.json
+  allow_draft_rules: true
+  require_reviewed_rules: false
+
+rag:
+  enabled: false
+  corpus_dir: data/corpus/cleaned_text
+  index_dir: backend/rag/index
+  model_dir: models/rag/biencoder
+  embedding_model_id: local-onnx-biencoder
+  chunk_size: 300
+  chunk_overlap: 50
+  dense_top_k: 100
+  sparse_top_k: 100
+  retriever_top_k_fused: 20
+  reranker_min_score: 0.3
+  rrf_k: 60
+  faiss_use_hnsw: true
+  faiss_hnsw_m: 32
+  faiss_ef_construction: 200
+  faiss_ef_search: 128
+  max_length: 256
+  intra_op_threads: 1
+  inter_op_threads: 1
+
+referral:
+  max_search_radius_km: 50.0
+  allow_out_of_radius_for_emergency: true
+
+language:
+  provider: noop
+  enabled_languages:
+    - en
+    - hi
+  default_language: en
+  require_human_review_below_confidence: 0.9
+
+llm:
+  model_path: models/llm/model.gguf
+  context_length: 2048
+  max_tokens: 300
+  temperature: 0.1
+  top_p: 0.9
+  n_threads: 2
+  n_gpu_layers: 0
+
+fl:
+  enabled: false
+  training_enabled: false
+  update_representation: not_implemented
+  server_address: 127.0.0.1:8080
+  model_path: models/triage_xgb.json
+  train_data_path: var/fl_train.npz
+  eval_data_path: var/fl_eval.npz
+  queue_dir: var/fl_queue
+  local_epochs: 3
+  learning_rate: 0.01
+  min_batch_size: 10
+  dp_epsilon: 1.0
+  dp_delta: 1.0e-6
+  dp_max_grad_norm: 1.0
+
+auth:
+  issuer: ayushbot-phc-gateway
+  audience: ayushbot-tablet
+  access_token_minutes: 15
+  refresh_token_days: 7
+  active_kid: gateway-1
+  keys: []
+  jwt_private_key_path: null
+  jwt_public_key_path: null
+
+sync:
+  resource_dir: var/sync_resources
+  idempotency_ttl_hours: 72
+  manifest_ttl_minutes: 15
+
+road_graph_path: null

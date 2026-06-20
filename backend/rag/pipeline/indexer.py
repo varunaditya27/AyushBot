@@ -55,26 +55,47 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
-import faiss
 import numpy as np
 
+try:
+	import faiss
+except ImportError:
+	faiss = None  # type: ignore[assignment]
 
-def build_faiss_index(embeddings: np.ndarray, use_hnsw: bool = False) -> faiss.Index:
+
+def _require_faiss():
+	if faiss is None:
+		raise RuntimeError("faiss-cpu is required to build a RAG index")
+	return faiss
+
+
+def build_faiss_index(
+	embeddings: np.ndarray,
+	*,
+	use_hnsw: bool = False,
+	hnsw_m: int = 32,
+	ef_construction: int = 200,
+	ef_search: int = 128,
+) -> Any:
+	faiss_module = _require_faiss()
 	if embeddings.size == 0:
 		raise ValueError("Embeddings array is empty")
 	dim = embeddings.shape[1]
 	if use_hnsw:
-		index = faiss.IndexHNSWFlat(dim, 32)
+		index = faiss_module.IndexHNSWFlat(dim, hnsw_m)
+		if hasattr(index, "hnsw"):
+			index.hnsw.efConstruction = ef_construction
+			index.hnsw.efSearch = ef_search
 	else:
-		index = faiss.IndexFlatIP(dim)
-	faiss.normalize_L2(embeddings)
+		index = faiss_module.IndexFlatIP(dim)
+	faiss_module.normalize_L2(embeddings)
 	index.add(embeddings.astype(np.float32))
 	return index
 
 
-def save_index(index: faiss.Index, index_path: str) -> None:
+def save_index(index: Any, index_path: str) -> None:
 	Path(index_path).parent.mkdir(parents=True, exist_ok=True)
-	faiss.write_index(index, index_path)
+	_require_faiss().write_index(index, index_path)
 
 
 def save_metadata(metadata: List[Dict[str, Any]], metadata_path: str) -> None:

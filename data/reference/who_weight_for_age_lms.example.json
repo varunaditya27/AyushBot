@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "reference_version": "replace-with-official-WHO-release",
+  "source": "replace-with-official-WHO-download-URL-and-release-date",
+  "status": "TEMPLATE",
+  "rows": [
+    {
+      "sex": "female",
+      "age_months": 0,
+      "l": 0.0,
+      "m": 1.0,
+      "s": 1.0
+    }
+  ]
+}

@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "ruleset_version": "ayushbot-pretriage-draft-2026-06-15",
+  "status": "DRAFT",
+  "sources": [
+    "docs/prd.md section 7 Agent 1",
+    "docs/dataset-analysis.md section 6C",
+    "research/ayushbot_paper.tex Intake and Pre-Triage Agent",
+    "docs/android-design-doc.md symptom checklist"
+  ],
+  "signal_quality": {
+    "window_readings": 10,
+    "window_seconds": 30,
+    "spo2_cv_max": 0.03,
+    "min_quality_score": null,
+    "bounds": {
+      "spo2": {"minimum": 40, "maximum": 100},
+      "heart_rate": {"minimum": 30, "maximum": 250},
+      "temperature": {"minimum": 30, "maximum": 45},
+      "respiratory_rate": {"minimum": null, "maximum": null},
+      "weight_kg": {"minimum": 0.001, "maximum": 60}
+    }
+  },
+  "rules": [
+    {
+      "id": "emergency_spo2_below_90",
+      "label": "SpO2 below configured emergency threshold",
+      "risk": "CRITICAL",
+      "conditions": [{"field": "spo2", "operator": "lt", "value": 90}],
+      "source": "research/ayushbot_paper.tex",
+      "medical_review_required": true
+    },
+    {
+      "id": "emergency_temperature_above_40",
+      "label": "Temperature above configured emergency threshold",
+      "risk": "CRITICAL",
+      "conditions": [{"field": "temperature", "operator": "gt", "value": 40}],
+      "source": "research/ayushbot_paper.tex",
+      "medical_review_required": true
+    },
+    {
+      "id": "emergency_convulsions",
+      "label": "Convulsions",
+      "risk": "CRITICAL",
+      "conditions": [{"field": "checklist.convulsions", "operator": "truthy"}],
+      "source": "docs/android-design-doc.md",
+      "medical_review_required": true
+    },
+    {
+      "id": "emergency_altered_consciousness",
+      "label": "Lethargic or unconscious",
+      "risk": "CRITICAL",
+      "conditions": [{"field": "checklist.altered_consciousness", "operator": "truthy"}],
+      "source": "docs/android-design-doc.md",
+      "medical_review_required": true
+    },
+    {
+      "id": "emergency_unable_to_feed",
+      "label": "Unable to drink or breastfeed",
+      "risk": "CRITICAL",
+      "conditions": [{"field": "checklist.unable_to_feed", "operator": "truthy"}],
+      "source": "docs/android-design-doc.md",
+      "medical_review_required": true
+    },
+    {
+      "id": "emergency_vomiting_everything",
+      "label": "Vomiting everything",
+      "risk": "CRITICAL",
+      "conditions": [{"field": "checklist.vomiting_everything", "operator": "truthy"}],
+      "source": "docs/android-design-doc.md",
+      "medical_review_required": true
+    },
+    {
+      "id": "severe_chest_indrawing",
+      "label": "Visible chest indrawing",
+      "risk": "HIGH",
+      "conditions": [{"field": "checklist.chest_indrawing", "operator": "truthy"}],
+      "source": "docs/android-design-doc.md",
+      "medical_review_required": true
+    },
+    {
+      "id": "severe_bilateral_oedema",
+      "label": "Bilateral oedema",
+      "risk": "HIGH",
+      "conditions": [{"field": "checklist.bilateral_oedema", "operator": "truthy"}],
+      "source": "docs/android-design-doc.md",
+      "medical_review_required": true
+    },
+    {
+      "id": "severe_wasting",
+      "label": "Visible severe wasting",
+      "risk": "HIGH",
+      "conditions": [{"field": "checklist.severe_wasting", "operator": "truthy"}],
+      "source": "docs/android-design-doc.md",
+      "medical_review_required": true
+    },
+    {
+      "id": "severe_waz_below_minus_3",
+      "label": "Weight-for-age Z-score below configured severe threshold",
+      "risk": "HIGH",
+      "conditions": [{"field": "weight_for_age_zscore", "operator": "lt", "value": -3}],
+      "source": "docs/ml-design.md section 3.2",
+      "medical_review_required": true
+    },
+    {
+      "id": "severe_fast_breathing_2_to_11_months",
+      "label": "Respiratory rate above configured threshold for 2-11 months",
+      "risk": "HIGH",
+      "conditions": [
+        {"field": "age_months", "operator": "gte", "value": 2},
+        {"field": "age_months", "operator": "lte", "value": 11},
+        {"field": "respiratory_rate", "operator": "gt", "value": 50}
+      ],
+      "source": "docs/dataset-analysis.md section 6C",
+      "medical_review_required": true
+    },
+    {
+      "id": "severe_fast_breathing_12_to_59_months",
+      "label": "Respiratory rate above configured threshold for 12-59 months",
+      "risk": "HIGH",
+      "conditions": [
+        {"field": "age_months", "operator": "gte", "value": 12},
+        {"field": "age_months", "operator": "lte", "value": 59},
+        {"field": "respiratory_rate", "operator": "gt", "value": 40}
+      ],
+      "source": "docs/dataset-analysis.md section 6C",
+      "medical_review_required": true
+    },
+    {
+      "id": "moderate_prolonged_fever_checklist",
+      "label": "Fever longer than seven days checklist flag",
+      "risk": "MEDIUM",
+      "conditions": [{"field": "checklist.fever_7days", "operator": "truthy"}],
+      "source": "docs/android-design-doc.md",
+      "medical_review_required": true
+    },
+    {
+      "id": "pending_heart_rate_age_band",
+      "label": "Age-dependent heart-rate threshold placeholder",
+      "risk": "HIGH",
+      "enabled": false,
+      "conditions": [
+        {"field": "age_months", "operator": "gte", "value": null},
+        {"field": "heart_rate", "operator": "gt", "value": null}
+      ],
+      "source": "MEDICAL REVIEW INPUT REQUIRED",
+      "medical_review_required": true
+    },
+    {
+      "id": "pending_diarrhea_duration",
+      "label": "Diarrhea-duration threshold placeholder",
+      "risk": "HIGH",
+      "enabled": false,
+      "conditions": [
+        {"field": "diarrhea_duration_days", "operator": "gte", "value": null}
+      ],
+      "source": "MEDICAL REVIEW INPUT REQUIRED",
+      "medical_review_required": true
+    }
+  ]
+}

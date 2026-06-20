@@ -23,11 +23,9 @@
 #     - Sessions are closed after each request (no connection leaks)
 #
 # INITIALIZATION:
-#   On first startup, if the database file does not exist:
-#     1. Create all tables from the ORM models (db/models.py)
-#     2. Seed static reference data (villages, facilities) from bundled
-#        JSON/CSV files in data/
-#     3. Log the database creation and seed status
+#   The SQLAlchemy engine is created lazily from the current configuration.
+#   Schema changes are applied only through Alembic migrations; this module
+#   does not call ORM create_all during application startup.
 #
 # MIGRATION STRATEGY:
 #   Alembic is used for schema migrations. Migration scripts are stored
@@ -46,66 +44,25 @@
 #
 # EXPORTS:
 #   - get_db(): FastAPI dependency that yields a SQLAlchemy session
-#   - engine: SQLAlchemy engine instance (for direct use by migrations)
+#   - get_engine(): lazily configured SQLAlchemy engine
 # =============================================================================
 
 from __future__ import annotations
 
 import logging
-import os
-from typing import Any, Dict, Generator, Optional
+from pathlib import Path
+from typing import Generator
 
-import yaml
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.db.models import Base
+from backend.config import load_settings
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_DB_PATH = "/opt/ayushbot/data/ayushbot.db"
-DEFAULT_WAL_MODE = True
-DEFAULT_JOURNAL_LIMIT_MB = 50
 
-
-def _load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
-	path = (
-		config_path
-		or os.getenv("AYUSHBOT_CONFIG")
-		or os.path.join(os.path.dirname(__file__), "..", "config.yaml")
-	)
-	path = os.path.abspath(path)
-	if not os.path.exists(path):
-		logger.warning("Config file not found at %s; using defaults", path)
-		return {}
-	try:
-		with open(path, "r", encoding="utf-8") as handle:
-			return yaml.safe_load(handle) or {}
-	except Exception as exc:  # pragma: no cover - defensive logging
-		logger.error("Failed to load config from %s: %s", path, exc)
-		return {}
-
-
-def _database_settings(config: Dict[str, Any]) -> Dict[str, Any]:
-	db_config = config.get("database", {}) if isinstance(config, dict) else {}
-	return {
-		"path": os.getenv("AYUSHBOT_DB_PATH", db_config.get("path", DEFAULT_DB_PATH)),
-		"wal_mode": str(
-			os.getenv("AYUSHBOT_DB_WAL_MODE", db_config.get("wal_mode", DEFAULT_WAL_MODE))
-		).lower()
-		in {"1", "true", "yes", "y"},
-		"journal_size_limit_mb": int(
-			os.getenv(
-				"AYUSHBOT_DB_JOURNAL_LIMIT_MB",
-				db_config.get("journal_size_limit_mb", DEFAULT_JOURNAL_LIMIT_MB),
-			)
-		),
-	}
-
-
-def _sqlite_url(path: str) -> str:
-	path = os.path.abspath(path)
+def _sqlite_url(path: Path) -> str:
 	return f"sqlite:///{path}"
 
 
@@ -119,41 +76,80 @@ def _configure_sqlite(engine: Engine, wal_mode: bool, journal_limit_mb: int) -> 
 			if wal_mode:
 				cursor.execute("PRAGMA journal_mode=WAL")
 				cursor.execute("PRAGMA synchronous=NORMAL")
-				cursor.execute(
-					"PRAGMA journal_size_limit=?",
-					(max(1, int(journal_limit_mb) * 1024 * 1024),),
-				)
+				journal_limit_bytes = max(1, int(journal_limit_mb) * 1024 * 1024)
+				cursor.execute(f"PRAGMA journal_size_limit={journal_limit_bytes}")
 		finally:
 			cursor.close()
 
 
-def create_engine_from_config(config_path: Optional[str] = None) -> Engine:
-	config = _load_config(config_path)
-	settings = _database_settings(config)
-	db_url = _sqlite_url(settings["path"])
-	engine = create_engine(
-		db_url,
-		connect_args={"check_same_thread": False, "timeout": 30},
-		pool_pre_ping=True,
-	)
-	_configure_sqlite(engine, settings["wal_mode"], settings["journal_size_limit_mb"])
-	return engine
-
-
-engine = create_engine_from_config()
+_engine: Engine | None = None
+_engine_url: str | None = None
 SessionLocal = sessionmaker(
-	bind=engine,
 	autocommit=False,
 	autoflush=False,
 	expire_on_commit=False,
 )
 
 
+def create_engine_from_config(
+	config_path: str | None = None,
+	*,
+	database_url: str | None = None,
+) -> Engine:
+	settings = load_settings(config_path).database
+	settings.path.parent.mkdir(parents=True, exist_ok=True)
+	url = database_url or _sqlite_url(settings.path)
+	engine = create_engine(
+		url,
+		connect_args={"check_same_thread": False, "timeout": 30},
+		pool_pre_ping=True,
+	)
+	_configure_sqlite(engine, settings.wal_mode, settings.journal_size_limit_mb)
+	return engine
+
+
+def get_engine(
+	config_path: str | None = None,
+	*,
+	database_url: str | None = None,
+	force_reload: bool = False,
+) -> Engine:
+	global _engine, _engine_url
+
+	settings = load_settings(config_path).database
+	settings.path.parent.mkdir(parents=True, exist_ok=True)
+	url = database_url or _sqlite_url(settings.path)
+	if force_reload or _engine is None or _engine_url != url:
+		if _engine is not None:
+			_engine.dispose()
+		_engine = create_engine(
+			url,
+			connect_args={"check_same_thread": False, "timeout": 30},
+			pool_pre_ping=True,
+		)
+		_configure_sqlite(_engine, settings.wal_mode, settings.journal_size_limit_mb)
+		_engine_url = url
+		SessionLocal.configure(bind=_engine)
+	return _engine
+
+
+def reset_engine() -> None:
+	global _engine, _engine_url
+	if _engine is not None:
+		_engine.dispose()
+	_engine = None
+	_engine_url = None
+	SessionLocal.configure(bind=None)
+
+
 def init_db() -> None:
-	Base.metadata.create_all(bind=engine)
+	from backend.db.migrate import upgrade
+
+	upgrade(str(get_engine().url))
 
 
 def get_db() -> Generator[Session, None, None]:
+	get_engine()
 	db = SessionLocal()
 	try:
 		yield db

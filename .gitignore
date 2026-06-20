@@ -16,6 +16,7 @@ build/
 .venv/
 venv/
 env/
+.env
 
 # ---- IDE ----
 .vscode/
@@ -32,6 +33,10 @@ data/corpus/chunks/
 data/corpus/raw_pdfs/*.pdf
 data/synthetic/*.parquet
 data/synthetic/*.csv
+data/reference/villages.json
+data/reference/villages.csv
+data/reference/facilities.json
+data/reference/facilities.csv
 
 # ---- Model Artifacts (large binary files) ----
 ml/triage_classifier/model/
@@ -51,11 +56,19 @@ ml/fl_simulation/results/
 # ---- RAG Index (large, reproducible) ----
 backend/rag/index/*.faiss
 backend/rag/index/*.pkl
+backend/rag/index/*.index
+backend/rag/index/*.json
+backend/rag/index/*.jsonl
+
+# ---- Local backend runtime ----
+var/
+models/
 
 # ---- TLS Certificates (secret) ----
 infra/certs/*.key
 infra/certs/*.crt
 infra/certs/*.pem
+infra/certs/*.srl
 backend/security/certs/
 
 # ---- Docker ----

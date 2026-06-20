@@ -77,15 +77,22 @@
 from __future__ import annotations
 
 import logging
-from typing import Callable
+import time
+from collections.abc import Callable
+from functools import lru_cache
+from typing import Any
 
-from langgraph.graph import END, StateGraph
+try:
+	from langgraph.graph import END, StateGraph
+except ImportError:
+	END = None
+	StateGraph = None  # type: ignore[assignment]
 
 from backend.agents.agent_diagnosis import run_diagnosis
 from backend.agents.agent_intake import run_intake
 from backend.agents.agent_language import postprocess_output, preprocess_input
 from backend.agents.agent_referral import run_referral
-from backend.agents.state import PatientState
+from backend.agents.state import PatientState, add_pipeline_error
 
 logger = logging.getLogger(__name__)
 
@@ -94,13 +101,118 @@ def _is_critical(state: PatientState) -> str:
 	return "referral" if state.get("risk_level") == "CRITICAL" else "diagnosis"
 
 
-def build_graph() -> StateGraph:
+def _ensure_fallback_action_plan(state: PatientState) -> None:
+	if state.get("action_plan"):
+		return
+	urgency = "IMMEDIATE" if state.get("risk_level") == "CRITICAL" else "WITHIN_24H"
+	state["action_plan"] = {
+		"urgency": urgency,
+		"referral": None,
+		"medications": [],
+		"immediate_actions": ["Refer to nearest available medical officer"],
+		"follow_up": {"follow_up_date": "As soon as possible"},
+		"referral_slip": None,
+		"primary_diagnosis": (
+			(state.get("differential_diagnosis") or {})
+			.get("diagnoses", [{}])[0]
+			.get("condition_name", "Unknown presentation")
+		),
+		"source_guideline": "",
+	}
+
+
+def _fallback_for_agent(agent_name: str, state: PatientState) -> None:
+	if agent_name == "intake":
+		state.setdefault("risk_level", "MEDIUM")
+		state.setdefault("risk_confidence", 0.0)
+		state.setdefault("risk_explanation", {"reason": "intake_failure"})
+		state.setdefault("validated_vitals", {})
+		state.setdefault("derived_features", {})
+		state.setdefault("signal_quality", {})
+		state["classifier_status"] = "INTAKE_FAILURE"
+		state["emergency_escalate"] = state.get("risk_level") == "CRITICAL"
+	elif agent_name == "diagnosis":
+		state["differential_diagnosis"] = {
+			"diagnoses": [
+				{
+					"rank": 1,
+					"condition_name": "Unknown presentation",
+					"icd_code": None,
+					"confidence": 0.0,
+					"evidence_summary": "Diagnosis agent fallback used.",
+					"citations": [],
+					"matching_symptoms": [],
+					"differentiating_factors": [],
+				}
+			],
+			"evidence_chunks_used": 0,
+			"model_confidence": 0.0,
+		}
+		state.setdefault("retrieved_chunks", [])
+		state.setdefault("retrieval_metrics", {})
+	elif agent_name == "referral":
+		_ensure_fallback_action_plan(state)
+	elif agent_name == "language_out":
+		state.setdefault("asha_output_text", "Refer to medical officer")
+		state.setdefault("asha_output_audio", None)
+
+
+def _run_agent(
+	agent_name: str,
+	handler: Callable[[PatientState], PatientState],
+	state: PatientState,
+) -> PatientState:
+	start = time.perf_counter()
+	try:
+		next_state = handler(state)
+	except Exception as exc:
+		logger.exception("%s agent failed", agent_name)
+		add_pipeline_error(
+			state,
+			stage=agent_name,
+			code=type(exc).__name__,
+			message=f"{agent_name} fallback used.",
+		)
+		_fallback_for_agent(agent_name, state)
+		state["pipeline_status"] = "DEGRADED"
+		next_state = state
+	next_state.setdefault("agent_timings", {})[agent_name] = (
+		time.perf_counter() - start
+	) * 1000
+	return next_state
+
+
+def _language_in(state: PatientState) -> PatientState:
+	return _run_agent("language_in", preprocess_input, state)
+
+
+def _intake(state: PatientState) -> PatientState:
+	return _run_agent("intake", run_intake, state)
+
+
+def _diagnosis(state: PatientState) -> PatientState:
+	return _run_agent("diagnosis", run_diagnosis, state)
+
+
+def _referral(state: PatientState) -> PatientState:
+	state = _run_agent("referral", run_referral, state)
+	_ensure_fallback_action_plan(state)
+	return state
+
+
+def _language_out(state: PatientState) -> PatientState:
+	return _run_agent("language_out", postprocess_output, state)
+
+
+def build_graph() -> Any:
+	if StateGraph is None:
+		raise RuntimeError("langgraph is not installed")
 	graph = StateGraph(PatientState)
-	graph.add_node("language_in", preprocess_input)
-	graph.add_node("intake", run_intake)
-	graph.add_node("diagnosis", run_diagnosis)
-	graph.add_node("referral", run_referral)
-	graph.add_node("language_out", postprocess_output)
+	graph.add_node("language_in", _language_in)
+	graph.add_node("intake", _intake)
+	graph.add_node("diagnosis", _diagnosis)
+	graph.add_node("referral", _referral)
+	graph.add_node("language_out", _language_out)
 
 	graph.set_entry_point("language_in")
 	graph.add_edge("language_in", "intake")
@@ -111,7 +223,29 @@ def build_graph() -> StateGraph:
 	return graph
 
 
+@lru_cache(maxsize=1)
+def get_compiled_graph() -> Any:
+	return build_graph().compile()
+
+
+def clear_graph_cache() -> None:
+	get_compiled_graph.cache_clear()
+
+
+def _run_sequential(state: PatientState) -> PatientState:
+	state = _language_in(state)
+	state = _intake(state)
+	if state.get("risk_level") != "CRITICAL":
+		state = _diagnosis(state)
+	state = _referral(state)
+	return _language_out(state)
+
+
 def run_pipeline(state: PatientState) -> PatientState:
-	graph = build_graph().compile()
-	result = graph.invoke(state)
+	if StateGraph is None:
+		result = _run_sequential(state)
+	else:
+		result = get_compiled_graph().invoke(state)
+	if result.get("pipeline_status") == "IN_PROGRESS":
+		result["pipeline_status"] = "DEGRADED" if result.get("errors") else "COMPLETED"
 	return result
