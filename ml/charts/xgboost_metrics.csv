@@ -1,0 +1,2 @@
+model,test_f1_macro,test_auc_ovr
+XGBClassifier,0.9983,1.0

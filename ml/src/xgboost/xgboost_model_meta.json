@@ -1,0 +1,80 @@
+{
+  "model_type": "XGBClassifier",
+  "num_classes": 4,
+  "label_order": [
+    "Low",
+    "Medium",
+    "High",
+    "Critical"
+  ],
+  "features": [
+    "spo2_current",
+    "hr_current",
+    "temperature_c",
+    "weight_kg",
+    "hr_spo2_ratio",
+    "ppg_rr_est",
+    "age_months",
+    "waz",
+    "fast_breathing",
+    "chest_indrawing",
+    "unable_to_drink",
+    "convulsions_24h",
+    "pallor",
+    "severe_edema",
+    "severe_wasting",
+    "neonate_danger",
+    "prolonged_fever",
+    "time_in_field_h",
+    "delta_spo2_30s",
+    "delta_hr_30s",
+    "spo2_cv",
+    "temp_ma3",
+    "hr_iqr",
+    "spo2_variance_flag"
+  ],
+  "feature_groups": {
+    "A_sensor": [
+      "spo2_current",
+      "hr_current",
+      "temperature_c",
+      "weight_kg",
+      "hr_spo2_ratio",
+      "ppg_rr_est"
+    ],
+    "B_clinical": [
+      "age_months",
+      "waz",
+      "fast_breathing",
+      "chest_indrawing",
+      "unable_to_drink",
+      "convulsions_24h",
+      "pallor",
+      "severe_edema",
+      "severe_wasting",
+      "neonate_danger",
+      "prolonged_fever",
+      "time_in_field_h"
+    ],
+    "C_temporal": [
+      "delta_spo2_30s",
+      "delta_hr_30s",
+      "spo2_cv",
+      "temp_ma3",
+      "hr_iqr",
+      "spo2_variance_flag"
+    ]
+  },
+  "metrics": {
+    "model": "XGBClassifier",
+    "best_iteration": 9,
+    "test_f1_macro": 0.9919,
+    "test_f1_weighted": 0.9933,
+    "test_auc_ovr": 0.9991,
+    "val_f1_macro": 0.996,
+    "val_auc_ovr": 0.9997,
+    "cv_auc_mean": 0.9983,
+    "cv_auc_std": 0.0009
+  },
+  "note": "Load with xgb.XGBClassifier().load_model('xgboost_model.json'). For inference: model.predict_proba(X)[0] gives 4-class probability. SHAP: shap.TreeExplainer(model).shap_values(X) for top-3 features."
+}
