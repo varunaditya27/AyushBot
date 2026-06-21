@@ -1,0 +1,2 @@
+model,best_iteration,test_f1_macro,test_f1_weighted,test_auc_ovr,val_f1_macro,val_auc_ovr,cv_auc_mean,cv_auc_std
+XGBClassifier,9,0.9919,0.9933,0.9991,0.996,0.9997,0.9983,0.0009
