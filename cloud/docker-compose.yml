@@ -1,0 +1,212 @@
+# =============================================================================
+# AyushBot Cloud — Docker Compose (Development)
+# =============================================================================
+#
+# PURPOSE:
+#   Multi-container Docker Compose setup for AyushBot cloud services
+#   (FL server, REST API, Analytics dashboard) with supporting infrastructure
+#   (PostgreSQL, InfluxDB).
+#
+# SERVICES:
+#   - cloud-fl-server: Flower Federated Learning server (port 8080)
+#   - cloud-api: FastAPI REST API (port 8443 TLS)
+#   - cloud-analytics: Streamlit dashboard (port 8501)
+#   - postgres: PostgreSQL database (port 5432)
+#   - influxdb: InfluxDB time-series database (port 8086)
+#
+# NETWORKS:
+#   - ayushbot-cloud-net: Internal bridge network for inter-service communication
+#
+# VOLUMES:
+#   - postgres-data: PostgreSQL persistent storage
+#   - influxdb-data: InfluxDB persistent storage
+#   - models-data: Shared model weights storage
+#   - certs-data: TLS certificates (ca.crt, server.crt, server.key, etc.)
+#
+# USAGE:
+#   Development: docker compose up --build
+#   Production:  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#   Stop:        docker compose down
+#   View logs:   docker compose logs -f [SERVICE_NAME]
+#
+# =============================================================================
+
+version: '3.9'
+
+services:
+  # =========================================================================
+  # PostgreSQL: Audit logs, user management, session state
+  # =========================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: ayushbot-postgres-dev
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ayushbot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password_change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-ayushbot_cloud}
+      POSTGRES_INITDB_ARGS: "-c shared_buffers=128MB -c max_connections=50"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - ayushbot-cloud-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ayushbot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # =========================================================================
+  # InfluxDB: Time-series metrics (FL rounds, hardware, model performance)
+  # =========================================================================
+  influxdb:
+    image: influxdb:2.7-alpine
+    container_name: ayushbot-influxdb-dev
+    environment:
+      INFLUXDB_DB: ${INFLUXDB_DB:-ayushbot}
+      INFLUXDB_ADMIN_USER: ${INFLUXDB_ADMIN_USER:-admin}
+      INFLUXDB_ADMIN_PASSWORD: ${INFLUXDB_ADMIN_PASSWORD:-admin_dev_password}
+      INFLUXDB_HTTP_AUTH_ENABLED: "true"
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+    networks:
+      - ayushbot-cloud-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # =========================================================================
+  # Flower FL Server: Federated Learning orchestration on port 8080
+  # =========================================================================
+  cloud-fl-server:
+    build:
+      context: ..
+      dockerfile: cloud/Dockerfile
+    container_name: ayushbot-fl-server-dev
+    command: ["-m", "fl_server.server", "--port", "8080", "--config", "cloud/config.yaml"]
+    environment:
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-ayushbot}:${POSTGRES_PASSWORD:-dev_password_change_me}@postgres:5432/${POSTGRES_DB:-ayushbot_cloud}
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN:-dev_token}
+      INFLUXDB_ORG: ${INFLUXDB_ORG:-ayushbot}
+      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET:-ayushbot}
+      FL_MIN_CLIENTS: ${FL_MIN_CLIENTS:-3}
+      FL_STRATEGY: ${FL_STRATEGY:-FedAvg}
+      FL_ROUNDS: ${FL_ROUNDS:-10}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8080:8080"
+    volumes:
+      - models-data:/app/models
+      - certs-data:/app/certs
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+    networks:
+      - ayushbot-cloud-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =========================================================================
+  # FastAPI REST API: Cloud API with authentication & rate limiting on port 8443
+  # =========================================================================
+  cloud-api:
+    build:
+      context: ..
+      dockerfile: cloud/Dockerfile
+    container_name: ayushbot-api-dev
+    command: ["-m", "cloud.api.main"]
+    environment:
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-ayushbot}:${POSTGRES_PASSWORD:-dev_password_change_me}@postgres:5432/${POSTGRES_DB:-ayushbot_cloud}
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN:-dev_token}
+      INFLUXDB_ORG: ${INFLUXDB_ORG:-ayushbot}
+      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET:-ayushbot}
+      ENABLE_TLS: ${ENABLE_TLS:-false}
+      CERTFILE: ${CERTFILE:-/app/certs/server.crt}
+      KEYFILE: ${KEYFILE:-/app/certs/server.key}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8443:8443"
+    volumes:
+      - certs-data:/app/certs
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+    networks:
+      - ayushbot-cloud-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:8443/api/v1/health/ || http://localhost:8443/api/v1/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =========================================================================
+  # Streamlit Analytics Dashboard: Real-time monitoring on port 8501
+  # =========================================================================
+  cloud-analytics:
+    build:
+      context: ..
+      dockerfile: cloud/Dockerfile
+    container_name: ayushbot-analytics-dev
+    command: ["streamlit", "run", "cloud/dashboards/main.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    environment:
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-ayushbot}:${POSTGRES_PASSWORD:-dev_password_change_me}@postgres:5432/${POSTGRES_DB:-ayushbot_cloud}
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN:-dev_token}
+      INFLUXDB_ORG: ${INFLUXDB_ORG:-ayushbot}
+      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET:-ayushbot}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+    networks:
+      - ayushbot-cloud-net
+    restart: unless-stopped
+
+# =========================================================================
+# Networks
+# =========================================================================
+networks:
+  ayushbot-cloud-net:
+    driver: bridge
+
+# =========================================================================
+# Volumes
+# =========================================================================
+volumes:
+  postgres-data:
+    driver: local
+  influxdb-data:
+    driver: local
+  models-data:
+    driver: local
+  certs-data:
+    driver: local

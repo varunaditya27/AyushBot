@@ -45,8 +45,7 @@ def sample_facility_db(tmp_path) -> Dict[str, str]:
 	conn = sqlite3.connect(db_path)
 	try:
 		conn.execute(
-			"CREATE TABLE facilities (id TEXT, name TEXT, type TEXT, latitude REAL, "
-			"longitude REAL, address TEXT, phone TEXT)"
+			"CREATE TABLE facilities (id TEXT, name TEXT, type TEXT, latitude REAL, longitude REAL, address TEXT, phone TEXT)"
 		)
 		conn.execute(
 			"INSERT INTO facilities VALUES (?, ?, ?, ?, ?, ?, ?)",

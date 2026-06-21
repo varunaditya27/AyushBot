@@ -1,0 +1,245 @@
+# =============================================================================
+# AyushBot Cloud — Master Configuration File
+# =============================================================================
+#
+# PURPOSE:
+#   Central YAML configuration for all cloud subsystems (FL server, API,
+#   analytics dashboard). Loaded at startup. Environment-specific values
+#   can be overridden via environment variables prefixed with AYUSHBOT_CLOUD_.
+#
+# ENVIRONMENT VARIABLE OVERRIDE:
+#   Any top-level key can be overridden via AYUSHBOT_CLOUD_{KEY}
+#   Example: AYUSHBOT_CLOUD_FL_PORT=9090 overrides fl.port
+#
+# =============================================================================
+
+# --- Federated Learning Server ---
+fl:
+  port: 8080                          # gRPC listener port
+  host: 0.0.0.0                       # Bind address (all interfaces)
+  
+  min_fit_clients: 10                 # Minimum PHC gateways per round
+  min_evaluate_clients: 10            # Minimum clients for evaluation
+  rounds: 50                          # Total FL rounds to run
+  
+  client_timeout_seconds: 300         # 5 min timeout for rural connectivity
+  client_reconnect_timeout_seconds: 600  # Wait max 10 min for client reconnection
+  
+  strategy: "FedAvg"                  # Aggregation strategy: FedAvg, FedProx, SCAFFOLD
+  
+  # TLS/mTLS Configuration
+  tls:
+    enabled: true
+    server_cert_path: "certs/server.crt"
+    server_key_path: "certs/server.key"
+    ca_cert_path: "certs/ca.crt"
+    client_auth_required: true
+  
+  # Byzantine Resilience (optional)
+  byzantine:
+    enabled: false                    # Disable by default; enable in Phase 8
+    strategy: "krum"                  # krum, trimmed_mean
+    num_byzantine_clients: 2          # Expected # of malicious clients
+
+# --- Cloud API ---
+api:
+  port: 8443                          # HTTPS port
+  host: 0.0.0.0
+  
+  cors_origins:
+    - "http://localhost:3000"         # Frontend dev server
+    - "http://localhost:8501"         # Streamlit dashboard
+    - "http://127.0.0.1:*"            # All local network origins
+  
+  # Rate Limiting (token bucket)
+  rate_limit:
+    enabled: true
+    tokens_per_minute: 60             # Allow 60 requests per minute per IP
+    burst_size: 10                    # Allow burst of 10 requests
+  
+  # SSL/TLS
+  ssl:
+    certfile: "certs/server.crt"
+    keyfile: "certs/server.key"
+  
+  # Request logging
+  request_logging:
+    enabled: true
+    log_request_body: false           # Don't log full request body (privacy)
+    log_response_body: false
+
+# --- Analytics Dashboard (Streamlit) ---
+dashboard:
+  port: 8501
+  host: 0.0.0.0
+  
+  authentication:
+    enabled: true
+    method: "api_key"                 # api_key or oauth2
+    api_key_header: "X-API-Key"
+  
+  # Map configuration
+  map:
+    center_latitude: 23.5937          # India center (Delhi)
+    center_longitude: 78.9629
+    initial_zoom: 5
+  
+  # Refresh intervals (seconds)
+  refresh:
+    metrics: 300                      # Refresh metrics every 5 min
+    alerts: 60                        # Refresh alerts every 1 min
+
+# --- Database: PostgreSQL ---
+database:
+  postgres:
+    host: "localhost"
+    port: 5432
+    user: "ayushbot"
+    password: "${POSTGRES_PASSWORD}"  # From environment variable
+    database: "ayushbot_cloud"
+    
+    pool_size: 20
+    max_overflow: 40
+    pool_recycle: 3600                # Recycle connections every hour
+    
+    ssl_mode: "prefer"                # SSL optional; upgrade if available
+  
+  # Migrations
+  migrations:
+    auto_upgrade: false               # Require manual migration
+    migration_dir: "db/migrations"
+
+# --- Time-Series Database: InfluxDB ---
+timeseries:
+  influxdb:
+    url: "http://localhost:8086"
+    org: "ayushbot"
+    bucket: "cloud_metrics"
+    token: "${INFLUXDB_TOKEN}"        # From environment variable
+    
+    # Retention policy
+    retention_days: 90                # Keep metrics for 90 days
+    
+    # Batch write settings
+    batch_size: 100                   # Batch writes every 100 points
+    flush_interval_seconds: 10        # Or every 10 seconds
+
+# --- Model Storage: S3 / GCS ---
+model_storage:
+  provider: "local"                   # local, s3, gcs
+  
+  # For local storage
+  local:
+    path: "./models"                  # Relative to working directory
+    max_versions_to_keep: 10          # Keep last 10 model versions
+  
+  # For AWS S3
+  s3:
+    bucket: "ayushbot-models"
+    region: "us-east-1"
+    access_key: "${AWS_ACCESS_KEY_ID}"      # From environment
+    secret_key: "${AWS_SECRET_ACCESS_KEY}"  # From environment
+  
+  # For Google Cloud Storage
+  gcs:
+    bucket: "ayushbot-models"
+    project_id: "ayushbot-gcp"
+    credentials: "${GCS_CREDENTIALS}"       # JSON file path from environment
+
+# --- Logging ---
+logging:
+  level: "INFO"                       # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "json"                      # json or text
+  
+  # Structured logging
+  structured:
+    enabled: true
+    include_request_id: true
+    include_timestamp: true
+    include_service_name: true
+  
+  # Log files
+  files:
+    enabled: true
+    directory: "logs"
+    max_size_mb: 100
+    backup_count: 10                  # Keep 10 backup log files
+  
+  # Output destinations
+  outputs:
+    - "console"                       # Log to stdout
+    - "file"                          # Log to file
+
+# --- Privacy & Differential Privacy ---
+privacy:
+  differential_privacy:
+    epsilon: 1.0                      # Lower = stricter privacy
+    delta: 1e-6                       # Probability of privacy violation
+    
+    gradient_clipping:
+      enabled: true
+      max_norm: 1.0                   # L2 norm clipping threshold
+    
+    noise_injection:
+      enabled: true
+      stddev_multiplier: 1.0          # Multiplier for noise standard deviation
+
+# --- Monitoring & Alerts ---
+monitoring:
+  prometheus:
+    enabled: true
+    port: 9090                        # Metrics export port
+    scrape_interval_seconds: 15
+  
+  alerts:
+    enabled: true
+    
+    # Alert thresholds
+    thresholds:
+      battery_low_percent: 20         # Alert if any device battery < 20%
+      model_drift_percent: 5.0        # Alert if local-global accuracy divergence > 5%
+      fl_round_timeout_minutes: 30    # Alert if round takes > 30 min
+      aggregation_failure_count: 3    # Alert after 3 consecutive failures
+      
+    # Notification channels
+    channels:
+      - type: "log"                   # Log to application logs
+      - type: "webhook"               # Send to webhook URL
+        url: "${ALERT_WEBHOOK_URL}"   # From environment
+
+# --- Security ---
+security:
+  # API authentication
+  api_keys:
+    enabled: true
+    storage: "database"               # database or file
+  
+  # JWT tokens (if using OAuth2)
+  jwt:
+    secret_key: "${JWT_SECRET_KEY}"
+    algorithm: "HS256"
+    expiration_hours: 24
+  
+  # CORS
+  cors:
+    allow_credentials: true
+    allow_methods: ["GET", "POST", "PUT", "DELETE"]
+    allow_headers: ["Content-Type", "Authorization"]
+
+# --- Deployment Environment ---
+environment:
+  name: "development"                 # development, staging, production
+  debug: false                        # Enable debug mode (slower, more verbose)
+  
+  # Feature flags
+  features:
+    byzantine_resilience: false       # Enable Byzantine defense (Phase 8)
+    model_compression: false          # Enable model compression (Phase 8)
+    advanced_analytics: false         # Enable advanced visualizations (Phase 8)
+
+# --- Timezone ---
+timezone: "Asia/Kolkata"              # IST (Indian Standard Time)
+
+# =============================================================================
+# END OF CONFIGURATION
+# =============================================================================
