@@ -68,11 +68,19 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
-import faiss
 import numpy as np
-from rank_bm25 import BM25Okapi
+
+try:
+	import faiss
+except ImportError:
+	faiss = None  # type: ignore[assignment]
+
+try:
+	from rank_bm25 import BM25Okapi
+except ImportError:
+	BM25Okapi = None  # type: ignore[assignment,misc]
 
 
 @dataclass
@@ -87,24 +95,30 @@ class RetrievedChunk:
 class HybridRetriever:
 	def __init__(
 		self,
-		index: faiss.Index,
+		index: Any,
 		metadata: List[Dict[str, Any]],
 		embedder,
-		bm25: Optional[BM25Okapi] = None,
+		bm25: Any = None,
+		rrf_k: int = 60,
 	) -> None:
 		self._index = index
 		self._metadata = metadata
 		self._embedder = embedder
 		self._bm25 = bm25
+		self._rrf_k = rrf_k
 
 	@classmethod
-	def from_files(cls, index_path: str, metadata_path: str, embedder) -> "HybridRetriever":
+	def from_files(
+		cls, index_path: str, metadata_path: str, embedder, *, rrf_k: int = 60
+	) -> "HybridRetriever":
+		if faiss is None:
+			raise RuntimeError("faiss-cpu is required for dense retrieval")
 		index = faiss.read_index(index_path)
 		with open(metadata_path, "r", encoding="utf-8") as handle:
 			metadata = json.load(handle)
 		texts = [item.get("text", "") for item in metadata]
-		bm25 = BM25Okapi([t.split() for t in texts]) if texts else None
-		return cls(index=index, metadata=metadata, embedder=embedder, bm25=bm25)
+		bm25 = BM25Okapi([t.split() for t in texts]) if texts and BM25Okapi else None
+		return cls(index=index, metadata=metadata, embedder=embedder, bm25=bm25, rrf_k=rrf_k)
 
 	def _dense(self, query: str, top_k: int) -> List[Tuple[int, float]]:
 		vector = self._embedder.embed(query)
@@ -127,10 +141,16 @@ class HybridRetriever:
 			scores[idx] = scores.get(idx, 0.0) + 1.0 / (k + rank + 1)
 		return scores
 
-	def query(self, query: str, top_k: int = 20, dense_k: int = 100, sparse_k: int = 100) -> List[RetrievedChunk]:
+	def query(
+		self,
+		query: str,
+		top_k: int = 20,
+		dense_k: int = 100,
+		sparse_k: int = 100,
+	) -> List[RetrievedChunk]:
 		dense = self._dense(query, dense_k)
 		sparse = self._sparse(query, sparse_k)
-		fused_scores = self._rrf(dense, sparse)
+		fused_scores = self._rrf(dense, sparse, k=self._rrf_k)
 		ranked = sorted(fused_scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
 		dense_map = {idx: score for idx, score in dense}
 		sparse_map = {idx: score for idx, score in sparse}

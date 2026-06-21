@@ -92,35 +92,15 @@ from __future__ import annotations
 import json
 import logging
 import math
-import os
-import sqlite3
 from typing import Any, Dict, List, Optional, Tuple
 
-import yaml
-
 from backend.agents.schemas.action_plan import ActionPlan, FollowUp, ReferralDetails
-from backend.agents.state import PatientState
+from backend.agents.state import PatientState, add_pipeline_error
+from backend.config import get_settings
+from backend.db import crud
+from backend.db.session import SessionLocal, get_engine
 
 logger = logging.getLogger(__name__)
-
-
-def _load_config() -> Dict[str, Any]:
-	config_path = os.getenv("AYUSHBOT_CONFIG") or os.path.join(
-		os.path.dirname(__file__), "..", "config.yaml"
-	)
-	if not os.path.exists(config_path):
-		return {}
-	try:
-		with open(config_path, "r", encoding="utf-8") as handle:
-			return yaml.safe_load(handle) or {}
-	except Exception as exc:  # pragma: no cover
-		logger.error("Failed to load config: %s", exc)
-		return {}
-
-
-def _db_path(config: Dict[str, Any]) -> str:
-	db_cfg = config.get("database", {}) if isinstance(config, dict) else {}
-	return os.getenv("AYUSHBOT_DB_PATH", db_cfg.get("path", "/opt/ayushbot/data/ayushbot.db"))
 
 
 def _haversine(a: Tuple[float, float], b: Tuple[float, float]) -> float:
@@ -148,23 +128,33 @@ def _facility_tier(risk_level: str | None) -> str:
 	return "HOME_MANAGEMENT"
 
 
-def _load_facilities(db_path: str) -> List[Dict[str, Any]]:
-	if not os.path.exists(db_path):
-		raise FileNotFoundError(f"Database not found at {db_path}")
-	conn = sqlite3.connect(db_path)
-	conn.row_factory = sqlite3.Row
-	try:
-		cursor = conn.execute(
-			"SELECT id, name, type, latitude, longitude, address, phone FROM facilities"
+def _facility_to_dict(facility: Any) -> Dict[str, Any]:
+	return {
+		"id": facility.id,
+		"name": facility.name,
+		"type": facility.type.value if hasattr(facility.type, "value") else facility.type,
+		"latitude": facility.latitude,
+		"longitude": facility.longitude,
+		"address": facility.address,
+		"phone": facility.phone,
+	}
+
+
+def _load_facilities(required_tier: str) -> List[Dict[str, Any]]:
+	get_engine()
+	with SessionLocal() as db:
+		facilities = crud.list_facilities(
+			db,
+			facility_type=None if required_tier == "HOME_MANAGEMENT" else required_tier,
 		)
-		return [dict(row) for row in cursor.fetchall()]
-	finally:
-		conn.close()
+		if not facilities and required_tier != "HOME_MANAGEMENT":
+			facilities = crud.list_facilities(db)
+		return [_facility_to_dict(facility) for facility in facilities]
 
 
-def _load_graph(config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-	graph_path = os.getenv("AYUSHBOT_ROAD_GRAPH", config.get("road_graph_path", ""))
-	if not graph_path or not os.path.exists(graph_path):
+def _load_graph() -> Optional[Dict[str, Any]]:
+	graph_path = get_settings().road_graph_path
+	if not graph_path or not graph_path.exists():
 		return None
 	with open(graph_path, "r", encoding="utf-8") as handle:
 		return json.load(handle)
@@ -206,9 +196,44 @@ def _pick_nearest(facilities: List[Dict[str, Any]], location: Tuple[float, float
 	return min(facilities, key=lambda f: _haversine(location, (f["latitude"], f["longitude"])))
 
 
+def _location_from_state(state: PatientState) -> Tuple[float, float] | None:
+	location = state.get("location")
+	if isinstance(location, (list, tuple)) and len(location) == 2:
+		try:
+			lat = float(location[0])
+			lon = float(location[1])
+		except (TypeError, ValueError):
+			return None
+		if -90 <= lat <= 90 and -180 <= lon <= 180:
+			return lat, lon
+	village_id = state.get("village_id")
+	if village_id:
+		try:
+			get_engine()
+			with SessionLocal() as db:
+				village = crud.get_village(db, str(village_id))
+				if village and village.latitude is not None and village.longitude is not None:
+					return float(village.latitude), float(village.longitude)
+		except Exception:
+			logger.debug("Village coordinate lookup failed", exc_info=True)
+	return None
+
+
+def _primary_diagnosis_label(state: PatientState) -> str:
+	diagnosis = (
+		state.get("differential_diagnosis", {})
+		.get("diagnoses", [{}])[0]
+		.get("condition_name", "")
+	)
+	if diagnosis:
+		return diagnosis
+	if state.get("risk_level") == "CRITICAL":
+		return "Emergency danger sign"
+	return "Triage review required"
+
+
 def run_referral(state: PatientState) -> PatientState:
-	config = _load_config()
-	db_path = _db_path(config)
+	settings = get_settings()
 	risk_level = state.get("risk_level")
 	required_tier = _facility_tier(risk_level)
 
@@ -220,31 +245,37 @@ def run_referral(state: PatientState) -> PatientState:
 			immediate_actions=["Provide home care guidance"],
 			follow_up=FollowUp(follow_up_date="After 48 hours"),
 			referral_slip=None,
-			primary_diagnosis=state.get("differential_diagnosis", {}).get("diagnoses", [{}])[0].get(
-				"condition_name", ""
-			),
+			primary_diagnosis=_primary_diagnosis_label(state),
 			source_guideline="",
 		)
 		state["action_plan"] = plan.model_dump()
 		return state
 
 	try:
-		facilities = _load_facilities(db_path)
+		facilities = _load_facilities(required_tier)
 	except Exception as exc:
-		state.setdefault("errors", []).append(str(exc))
+		add_pipeline_error(
+			state,
+			stage="referral",
+			code=type(exc).__name__,
+			message="Facility lookup failed.",
+		)
 		facilities = []
 
-	facilities = [f for f in facilities if f.get("type") == required_tier] or facilities
-
-	location = state.get("location")
-	if not location:
-		location = (0.0, 0.0)
+	location = _location_from_state(state)
+	if location is None:
+		add_pipeline_error(
+			state,
+			stage="referral",
+			code="LOCATION_UNAVAILABLE",
+			message="Patient location was not provided; distance and travel time are unavailable.",
+		)
 
 	destination: Optional[Dict[str, Any]] = None
 	route = []
-	distance_km = 0.0
-	graph = _load_graph(config)
-	if graph and facilities and isinstance(location, (list, tuple)):
+	distance_km: float | None = None
+	graph = _load_graph()
+	if graph and facilities:
 		nodes = graph.get("nodes", {})
 		start_node = nodes.get(state.get("village_id")) or graph.get("default_start")
 		target_nodes = [nodes.get(f["id"]) for f in facilities if nodes.get(f["id"]) is not None]
@@ -254,26 +285,56 @@ def run_referral(state: PatientState) -> PatientState:
 			destination = next((f for f in facilities if nodes.get(f["id"]) == best), None)
 
 	if not destination and facilities:
-		if isinstance(location, (list, tuple)) and len(location) == 2:
-			destination = _pick_nearest(facilities, (float(location[0]), float(location[1])))
+		if location is not None:
+			destination = _pick_nearest(facilities, location)
 			distance_km = _haversine(
-				(float(location[0]), float(location[1])),
+				location,
 				(destination["latitude"], destination["longitude"]),
 			)
+			if distance_km > settings.referral.max_search_radius_km:
+				add_pipeline_error(
+					state,
+					stage="referral",
+					code="NO_FACILITY_WITHIN_RADIUS",
+					message=(
+						"No matching facility was found within the configured "
+						f"{settings.referral.max_search_radius_km:g} km radius."
+					),
+				)
+				if (
+					risk_level != "CRITICAL"
+					or not settings.referral.allow_out_of_radius_for_emergency
+				):
+					destination = None
 		else:
 			destination = facilities[0]
 
 	if not destination:
-		state.setdefault("errors", []).append("No facilities available")
+		add_pipeline_error(
+			state,
+			stage="referral",
+			code="NO_FACILITIES_AVAILABLE",
+			message="No matching referral facility is available.",
+		)
 		return state
+
+	distance_value = float(distance_km) if distance_km is not None else 0.0
+	route_description = " -> ".join(route) if route else ""
+	if location is None:
+		route_description = "Distance unavailable: patient location not provided"
+	elif distance_km is not None and distance_km > settings.referral.max_search_radius_km:
+		route_description = (
+			route_description
+			or "Nearest emergency facility is outside configured search radius"
+		)
 
 	referral = ReferralDetails(
 		facility_name=destination.get("name", "Unknown"),
 		facility_type=destination.get("type", required_tier),
 		address=destination.get("address", ""),
-		distance_km=float(distance_km),
-		travel_time_minutes=int(distance_km * 4),
-		route_description=" -> ".join(route) if route else "",
+		distance_km=distance_value,
+		travel_time_minutes=int(distance_value * 4) if distance_km is not None else 0,
+		route_description=route_description,
 		phone_number=destination.get("phone"),
 		facility_coordinates=(destination.get("latitude"), destination.get("longitude")),
 	)
@@ -283,18 +344,17 @@ def run_referral(state: PatientState) -> PatientState:
 		referral=referral,
 		medications=[],
 		immediate_actions=["Refer to higher facility"],
-		follow_up=FollowUp(follow_up_date="After referral"),
-		referral_slip=None,
-		primary_diagnosis=state.get("differential_diagnosis", {}).get("diagnoses", [{}])[0].get(
-			"condition_name", ""
-		),
-		source_guideline="",
-	)
+			follow_up=FollowUp(follow_up_date="After referral"),
+			referral_slip=None,
+			primary_diagnosis=_primary_diagnosis_label(state),
+			source_guideline="",
+		)
 
 	state["action_plan"] = plan.model_dump()
 	state["routing_result"] = {
 		"facility": destination,
 		"distance_km": distance_km,
+		"location_available": location is not None,
 		"route": route,
 	}
 	return state

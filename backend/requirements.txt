@@ -1,75 +1,23 @@
-# =============================================================================
-# AyushBot Backend — Python Dependencies (requirements.txt)
-# =============================================================================
-#
-# PURPOSE:
-#   Lists all Python package dependencies for the backend service.
-#   Install with: pip install -r requirements.txt
-#
-# DEPENDENCY GROUPS:
-#
-# --- API Framework ---
-# fastapi                  # Async web framework
-# uvicorn[standard]        # ASGI server with HTTP/2 and WebSocket support
-# pydantic>=2.0            # Data validation and serialization
-# python-multipart         # File upload support for sync endpoints
-# langgraph                # Agent orchestration state machine
-#
-# --- Database ---
-# sqlalchemy>=2.0          # ORM for SQLite
-# alembic                  # Database migration management
-# aiosqlite                # Async SQLite driver for FastAPI
-#
-# --- RAG Pipeline ---
-# faiss-cpu                # Facebook HNSW vector index (CPU version for RPi 4)
-# rank-bm25                # Sparse BM25 retrieval
-# pymupdf                  # PDF text extraction for corpus ingestion
-#
-# --- LLM ---
-# llama-cpp-python         # GGUF model inference (Phi-3 Mini / Gemma-3)
-# jinja2                   # Prompt template rendering
-#
-# --- Federated Learning ---
-# flwr                     # Flower FL framework (client + common)
-#
-# --- ML / Numerical ---
-# numpy                    # Array operations
-# scipy                    # Scientific computing (Kalman filter, statistics)
-# scikit-learn             # Preprocessing, metrics
-# xgboost                  # Triage classifier (Agent 1 model)
-# onnxruntime              # Optional: ONNX model inference
-#
-# --- Language Agent ---
-# tokenizers               # Fast tokenization
-#
-# --- Utilities ---
-# pyyaml                   # YAML config file parsing
-# httpx                    # Async HTTP client (for health checks)
-# prometheus-client        # Metrics export for monitoring
-# structlog                # Structured JSON logging
-# cryptography             # TLS certificate handling
-# zeroconf                 # mDNS service discovery for local network
-# pyjwt                    # ECDSA-backed JWT authentication
-# argon2-cffi              # Argon2 password hashing
-# paho-mqtt                # MQTT client for telemetry ingestion
-# redis                    # Redis client for telemetry queue
-#
-# --- Development Only (not installed in production Docker image) ---
-# pytest                   # Testing framework
-# pytest-asyncio           # Async test support
-# httpx                    # Test client for FastAPI
-# ruff                     # Linting
-# black                    # Code formatting
-# mypy                     # Type checking
-# =============================================================================
+# Core backend runtime
+alembic>=1.13,<2
+argon2-cffi>=23.1,<26
+fastapi>=0.110,<1
+numpy>=1.26,<3
+paho-mqtt>=2.1,<3
+pydantic>=2.6,<3
+PyJWT[crypto]>=2.8,<3
+PyYAML>=6,<7
+redis>=5,<7
+SQLAlchemy>=2.0,<3
+uvicorn[standard]>=0.29,<1
 
-# --- Runtime Dependencies (minimal for Phase 2) ---
-fastapi
-uvicorn[standard]
-pydantic>=2.0
-sqlalchemy>=2.0
-pyyaml
-pyjwt
-argon2-cffi
-paho-mqtt
-redis
+# Optional AI/FL implementations imported by backend modules. The code falls
+# back cleanly when local model/index artifacts are not configured.
+faiss-cpu>=1.8,<2
+flwr>=1.9,<2
+langgraph>=0.2,<1
+llama-cpp-python>=0.2.80,<1
+onnxruntime>=1.17,<2
+rank-bm25>=0.2.2,<1
+tokenizers>=0.19,<1
+xgboost>=2.0,<4

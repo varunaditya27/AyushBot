@@ -1,0 +1,20 @@
+{
+  "model_version": "replace-with-approved-model-version",
+  "feature_order": [
+    "age_months",
+    "sex_male",
+    "spo2",
+    "heart_rate",
+    "temperature",
+    "respiratory_rate",
+    "weight_kg",
+    "weight_for_age_zscore",
+    "delta_spo2",
+    "delta_heart_rate",
+    "spo2_cv",
+    "spo2_deficit"
+  ],
+  "classes": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+  "output_type": "probabilities",
+  "calibration_temperature": 1.0
+}

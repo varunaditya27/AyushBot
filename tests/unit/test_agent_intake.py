@@ -1,80 +1,366 @@
-# =============================================================================
-# AyushBot Tests — Unit: Intake Agent (Agent 1)
-# =============================================================================
-#
-# PURPOSE:
-#   Unit tests for the Intake/Pre-Triage Agent (backend/agents/agent_intake.py).
-#   Verifies that the agent correctly classifies patients into risk levels
-#   based on vital signs and ASHA checklist inputs.
-#
-# TEST CASES:
-#
-#   test_classify_critical_case
-#     Input: SpO2=85%, HR=180, Temp=40.2°C, chest_indrawing=True
-#     Expected: risk_level=CRITICAL, confidence >= 0.8
-#     Rationale: Multiple danger signs, severe hypoxia → CRITICAL
-#
-#   test_classify_low_risk_case
-#     Input: SpO2=98%, HR=120, Temp=36.8°C, no_danger_signs
-#     Expected: risk_level=LOW, confidence >= 0.7
-#     Rationale: Normal vitals, no danger signs → LOW
-#
-#   test_classify_medium_risk_case
-#     Input: SpO2=95%, HR=140, Temp=38.5°C, cough=True
-#     Expected: risk_level=MEDIUM or HIGH
-#     Rationale: Mild fever + elevated HR, borderline case
-#
-#   test_missing_spo2_handling
-#     Input: SpO2=None (sensor failed), HR=130, Temp=37.5°C
-#     Expected: Agent handles gracefully (uses imputed or fallback logic),
-#       does NOT crash, flags the sensor failure in output
-#
-#   test_who_zscore_computation
-#     Input: age_months=18, weight_kg=7.5, sex="female"
-#     Expected: WAZ < -2 (underweight), correctly computed from WHO tables
-#
-#   test_output_schema_compliance
-#     Input: Any valid patient data
-#     Expected: Output conforms to schemas/patient_assessment.py Pydantic model
-#
-#   test_shap_explanation_present
-#     Input: Any valid patient data
-#     Expected: The output includes a SHAP-based explanation of which features
-#       contributed most to the risk classification
-#
-# FIXTURES USED:
-#   - sample_patient_state (from conftest.py)
-#   - mock_xgboost_model (to avoid loading real model in tests)
-# =============================================================================
+from __future__ import annotations
 
+import json
+from types import SimpleNamespace
+
+import numpy as np
 import pytest
 
-pytest.importorskip("xgboost")
+from backend.agents import agent_intake
+from backend.agents.agent_intake import LoadedModel, ModelMetadata, run_intake
+from backend.agents.pretriage_reference import (
+	PreTriageRuleset,
+	clear_reference_caches,
+	load_growth_reference,
+)
+from backend.config import clear_settings_cache
 
-import pytest
 
-pytest.importorskip("xgboost")
+@pytest.fixture(autouse=True)
+def _clear_intake_state():
+	clear_settings_cache()
+	clear_reference_caches()
+	agent_intake.clear_intake_caches()
+	yield
+	clear_settings_cache()
+	clear_reference_caches()
+	agent_intake.clear_intake_caches()
 
-from backend.agents.agent_intake import run_intake
+
+def _run(state, **updates):
+	copy = dict(state)
+	copy.update(updates)
+	return run_intake(copy)
 
 
-def test_classify_critical_case(sample_patient_state):
-	sample_patient_state["raw_vitals"] = {
-		"spo2": 85,
-		"heart_rate": 180,
-		"temperature_celsius": 40.2,
-	}
-	result = run_intake(sample_patient_state)
+def test_spo2_emergency_boundary(sample_patient_state):
+	at_boundary = _run(
+		sample_patient_state,
+		raw_vitals={"spo2": 90, "heart_rate": 100, "temperature_celsius": 37},
+	)
+	assert at_boundary["risk_level"] == "MEDIUM"
+
+	below_boundary = _run(
+		sample_patient_state,
+		raw_vitals={"spo2": 89.9, "heart_rate": 100, "temperature_celsius": 37},
+	)
+	assert below_boundary["risk_level"] == "CRITICAL"
+	assert below_boundary["emergency_escalate"] is True
+
+
+def test_temperature_emergency_boundary(sample_patient_state):
+	at_boundary = _run(
+		sample_patient_state, raw_vitals={"temperature_celsius": 40}
+	)
+	assert at_boundary["risk_level"] == "MEDIUM"
+	above_boundary = _run(
+		sample_patient_state, raw_vitals={"temperature_celsius": 40.1}
+	)
+	assert above_boundary["risk_level"] == "CRITICAL"
+
+
+@pytest.mark.parametrize(
+	"checklist_key",
+	["convulsions", "lethargic", "unconscious", "unable_drink", "vomiting"],
+)
+def test_general_danger_signs_override_model(sample_patient_state, checklist_key):
+	result = _run(
+		sample_patient_state,
+		raw_vitals={},
+		asha_checklist={checklist_key: True},
+	)
 	assert result["risk_level"] == "CRITICAL"
-	assert result["risk_confidence"] >= 0.8
+	assert result["risk_confidence"] == 1.0
 
 
-def test_missing_spo2_handling(sample_patient_state):
-	sample_patient_state["raw_vitals"] = {
-		"spo2": None,
-		"heart_rate": 130,
-		"temperature_celsius": 37.5,
+@pytest.mark.parametrize(
+	"checklist_key",
+	["chest_indrawing", "edema", "wasting"],
+)
+def test_severe_checklist_rules(sample_patient_state, checklist_key):
+	result = _run(
+		sample_patient_state,
+		raw_vitals={},
+		asha_checklist={checklist_key: True},
+	)
+	assert result["risk_level"] == "HIGH"
+
+
+@pytest.mark.parametrize(
+	("age_months", "rate", "expected"),
+	[
+		(2, 50, "MEDIUM"),
+		(2, 51, "HIGH"),
+		(11, 51, "HIGH"),
+		(12, 40, "MEDIUM"),
+		(12, 41, "HIGH"),
+		(59, 41, "HIGH"),
+		(60, 100, "MEDIUM"),
+	],
+)
+def test_age_dependent_respiratory_boundaries(
+	sample_patient_state, age_months, rate, expected
+):
+	result = _run(
+		sample_patient_state,
+		age_months=age_months,
+		raw_vitals={"respiratory_rate": rate},
+	)
+	assert result["risk_level"] == expected
+
+
+def test_configurable_age_heart_rate_and_diarrhea_rules():
+	ruleset = PreTriageRuleset.model_validate(
+		{
+			"schema_version": 1,
+			"ruleset_version": "synthetic-rules",
+			"status": "DRAFT",
+			"sources": ["synthetic test fixture only"],
+			"signal_quality": {
+				"window_readings": 2,
+				"window_seconds": 30,
+				"spo2_cv_max": 0.03,
+				"bounds": {},
+			},
+			"rules": [
+				{
+					"id": "synthetic-age-hr",
+					"label": "synthetic",
+					"risk": "HIGH",
+					"conditions": [
+						{"field": "age_months", "operator": "lte", "value": 12},
+						{"field": "heart_rate", "operator": "gt", "value": 123},
+					],
+					"source": "synthetic test fixture only",
+				},
+				{
+					"id": "synthetic-diarrhea",
+					"label": "synthetic",
+					"risk": "MEDIUM",
+					"conditions": [
+						{
+							"field": "diarrhea_duration_days",
+							"operator": "gte",
+							"value": 4,
+						}
+					],
+					"source": "synthetic test fixture only",
+				},
+			],
+		}
+	)
+	matched = agent_intake._matched_rules(
+		ruleset,
+		{"age_months": 12, "heart_rate": 124, "diarrhea_duration_days": 4},
+		{},
+	)
+	assert {rule.id for rule in matched} == {
+		"synthetic-age-hr",
+		"synthetic-diarrhea",
 	}
-	result = run_intake(sample_patient_state)
-	assert result["signal_quality"]["spo2"] == "INVALID"
-	assert result["risk_level"] in {"LOW", "MEDIUM", "HIGH"}
+
+
+def test_missing_sensors_are_not_replaced_with_zero(sample_patient_state):
+	result = _run(sample_patient_state, raw_vitals={})
+	assert result["risk_level"] == "MEDIUM"
+	assert result["validated_vitals"]["spo2"] is None
+	assert result["validated_vitals"]["heart_rate"] is None
+	assert result["validated_vitals"]["temperature"] is None
+	assert result["validated_vitals"]["respiratory_rate"] is None
+	assert result["validated_vitals"]["weight_kg"] == 8.2
+	assert result["derived_features"]["spo2"] is None
+	assert result["derived_features"]["spo2_deficit"] is None
+	assert result["signal_quality"]["spo2"]["status"] == "MISSING"
+
+
+def test_unreliable_spo2_window_is_excluded(sample_patient_state):
+	history = [
+		{"timestamp_ms": index * 1000, "spo2": value}
+		for index, value in enumerate([80, 99, 81, 100, 82, 99, 80, 100, 81, 99])
+	]
+	result = _run(
+		sample_patient_state,
+		raw_vitals={"spo2": 85, "history": history},
+	)
+	assert result["validated_vitals"]["spo2"] is None
+	assert result["signal_quality"]["spo2"]["status"] == "UNRELIABLE"
+	assert result["risk_level"] == "MEDIUM"
+
+
+def test_short_window_delta_features(sample_patient_state):
+	result = _run(
+		sample_patient_state,
+		raw_vitals={
+			"spo2": 96,
+			"heart_rate": 120,
+			"history": [
+				{"timestamp_ms": 0, "spo2": 99, "heart_rate": 100},
+				{"timestamp_ms": 20_000, "spo2": 97, "heart_rate": 110},
+				{"timestamp_ms": 35_000, "spo2": 96, "heart_rate": 120},
+			],
+		},
+	)
+	assert result["derived_features"]["delta_spo2"] == -1
+	assert result["derived_features"]["delta_heart_rate"] == 10
+
+
+def test_lms_weight_for_age_calculation_and_interpolation(tmp_path):
+	path = tmp_path / "growth.json"
+	path.write_text(
+		json.dumps(
+			{
+				"schema_version": 1,
+				"reference_version": "synthetic-lms-test",
+				"source": "synthetic test fixture only",
+				"status": "TEMPLATE",
+				"rows": [
+					{"sex": "female", "age_months": 0, "l": 1, "m": 4, "s": 0.25},
+					{"sex": "female", "age_months": 2, "l": 1, "m": 6, "s": 0.25},
+				],
+			}
+		),
+		encoding="utf-8",
+	)
+	reference = load_growth_reference(path)
+	assert reference.weight_for_age_zscore(
+		sex="female", age_months=1, weight_kg=5
+	) == pytest.approx(0)
+	assert reference.weight_for_age_zscore(
+		sex="male", age_months=1, weight_kg=5
+	) is None
+
+
+class _FakeBooster:
+	def predict(self, _matrix, pred_contribs=False):
+		if pred_contribs:
+			return np.array([[0.1, -0.8, 0.3, 0.0]])
+		return np.array([[0.1, 0.2, 0.3, 0.4]])
+
+
+def test_calibrated_probabilities_and_shap_top_three(monkeypatch):
+	monkeypatch.setattr(
+		agent_intake,
+		"xgb",
+		SimpleNamespace(DMatrix=lambda values, feature_names: (values, feature_names)),
+	)
+	model = LoadedModel(
+		booster=_FakeBooster(),
+		metadata=ModelMetadata(
+			model_version="synthetic-model",
+			feature_order=["age_months", "spo2", "heart_rate"],
+			classes=["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+			calibration_temperature=2.0,
+		),
+	)
+	risk, confidence, explanations, probabilities = agent_intake._model_prediction(
+		model, {"age_months": 12, "spo2": None, "heart_rate": 100}
+	)
+	assert risk == "CRITICAL"
+	assert 0 < confidence < 0.4
+	assert len(explanations) == 3
+	assert explanations[0]["feature"] == "spo2"
+	assert sum(probabilities.values()) == pytest.approx(1)
+
+
+def test_deterministic_emergency_overrides_lower_model(
+	sample_patient_state, monkeypatch
+):
+	model = LoadedModel(
+		booster=_FakeBooster(),
+		metadata=ModelMetadata(
+			model_version="synthetic-model",
+			feature_order=["age_months", "spo2", "heart_rate"],
+			classes=["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+		),
+	)
+	monkeypatch.setattr(agent_intake, "_load_model", lambda: model)
+	monkeypatch.setattr(
+		agent_intake,
+		"_model_prediction",
+		lambda _model, _features: (
+			"LOW",
+			0.99,
+			[{"feature": "spo2", "contribution": -1, "value": 85}],
+			{"LOW": 0.99, "MEDIUM": 0.01, "HIGH": 0.0, "CRITICAL": 0.0},
+		),
+	)
+	result = _run(sample_patient_state, raw_vitals={"spo2": 85})
+	assert result["risk_level"] == "CRITICAL"
+
+
+def test_model_failure_returns_medium_without_danger_rule(
+	sample_patient_state, monkeypatch
+):
+	def _failure():
+		raise ValueError("malformed model")
+
+	monkeypatch.setattr(agent_intake, "_load_model", _failure)
+	result = _run(sample_patient_state, raw_vitals={"spo2": 98})
+	assert result["risk_level"] == "MEDIUM"
+	assert result["classifier_status"] == "MODEL_FAILURE"
+	assert result["errors"][-1]["stage"] == "pretriage_model"
+
+
+def test_model_failure_does_not_suppress_danger_rule(
+	sample_patient_state, monkeypatch
+):
+	monkeypatch.setattr(
+		agent_intake, "_load_model", lambda: (_ for _ in ()).throw(ValueError())
+	)
+	result = _run(
+		sample_patient_state,
+		raw_vitals={"spo2": 98},
+		asha_checklist={"convulsions": True},
+	)
+	assert result["risk_level"] == "CRITICAL"
+
+
+def test_malformed_model_feature_count_is_rejected(tmp_path, monkeypatch):
+	model_path = tmp_path / "model.json"
+	metadata_path = tmp_path / "metadata.json"
+	model_path.write_text("{}", encoding="utf-8")
+	metadata_path.write_text(
+		json.dumps(
+			{
+				"model_version": "synthetic",
+				"feature_order": ["age_months", "spo2"],
+				"classes": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+			}
+		),
+		encoding="utf-8",
+	)
+	config_path = tmp_path / "config.yaml"
+	config_path.write_text(
+		f"""
+triage_model:
+  path: {model_path}
+  metadata_path: {metadata_path}
+  rules_path: data/reference/pretriage_rules.json
+  growth_reference_path: data/reference/who_weight_for_age_lms.json
+""",
+		encoding="utf-8",
+	)
+
+	class BadBooster:
+		feature_names = None
+
+		def load_model(self, _path):
+			return None
+
+		def num_features(self):
+			return 3
+
+	monkeypatch.setenv("AYUSHBOT_CONFIG", str(config_path))
+	monkeypatch.setattr(agent_intake, "xgb", SimpleNamespace(Booster=BadBooster))
+	clear_settings_cache()
+	agent_intake.clear_intake_caches()
+	with pytest.raises(ValueError, match="feature count"):
+		agent_intake._load_model()
+
+
+def test_ruleset_and_reference_versions_are_recorded(sample_patient_state):
+	result = _run(sample_patient_state, raw_vitals={"spo2": 98})
+	assert result["ruleset_version"] == "ayushbot-pretriage-draft-2026-06-15"
+	assert result["growth_reference_version"] == "WHO-WFA-LMS-PENDING"
+	assert result["model_version"] is None
+	assert result["medical_review_required"] is True

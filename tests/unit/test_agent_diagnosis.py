@@ -46,13 +46,7 @@
 #   - sample_patient_state, mock_llm_client, mock_faiss_index
 # =============================================================================
 
-import pytest
-
-pytest.importorskip("llama_cpp")
-
-import pytest
-
-pytest.importorskip("llama_cpp")
+import json
 
 from backend.agents.agent_diagnosis import run_diagnosis
 
@@ -69,3 +63,129 @@ def test_guardrail_fallback(sample_patient_state, monkeypatch):
 	result = run_diagnosis(sample_patient_state)
 	diagnosis = result["differential_diagnosis"]
 	assert diagnosis["diagnoses"][0]["condition_name"] == "Unknown presentation"
+	assert diagnosis["citation_status"] == "NO_EVIDENCE_RETRIEVED"
+	assert diagnosis["non_diagnostic_disclaimer"]
+
+
+class _DisabledRetriever:
+	def query(self, _text):
+		return {"results": [], "guardrail_triggered": True, "disabled": True}
+
+
+def test_rag_disabled_citation_behavior_is_explicit(sample_patient_state, monkeypatch):
+	from backend.agents import agent_diagnosis
+
+	monkeypatch.setattr(agent_diagnosis, "_get_retriever", lambda: _DisabledRetriever())
+	result = run_diagnosis(sample_patient_state)
+	diagnosis = result["differential_diagnosis"]
+	assert diagnosis["citation_status"] == "RAG_DISABLED"
+	assert diagnosis["diagnoses"][0]["citations"][0]["source_document"] == "RAG_DISABLED"
+
+
+class _EvidenceRetriever:
+	def query(self, _text):
+		return {
+			"guardrail_triggered": False,
+			"results": [
+				{
+					"text": "Synthetic evidence only.",
+					"score": 0.91,
+					"metadata": {
+						"chunk_id": "chunk-1",
+						"source": "synthetic-guideline.txt",
+						"section": "demo",
+					},
+				}
+			],
+		}
+
+
+class _ValidEngine:
+	def __init__(self):
+		self.prompt = None
+
+	def generate_json(self, prompt, _schema, max_tokens):
+		self.prompt = prompt
+		return json.dumps(
+			{
+				"diagnoses": [
+					{
+						"rank": 1,
+						"condition_name": "Synthetic condition",
+						"confidence": 0.4,
+						"evidence_summary": "Supported by synthetic fixture.",
+						"citations": [
+							{
+								"source_document": "synthetic-guideline.txt",
+								"page_number": None,
+								"section": "demo",
+								"chunk_id": "chunk-1",
+								"relevance_score": 0.91,
+							}
+						],
+						"matching_symptoms": ["fever"],
+						"differentiating_factors": [],
+					}
+				],
+				"possible_conditions": ["Synthetic condition"],
+				"uncertainty": "Moderate uncertainty.",
+				"red_flags": ["high fever"],
+				"recommended_next_action": "Review with Medical Officer.",
+				"non_diagnostic_disclaimer": "Decision support only.",
+				"citation_status": "REQUIRED_AND_PRESENT",
+				"model_confidence": 0.4,
+			}
+		)
+
+
+def test_llm_output_is_validated_and_prompt_is_structured(
+	sample_patient_state, monkeypatch
+):
+	from backend.agents import agent_diagnosis
+
+	engine = _ValidEngine()
+	monkeypatch.setattr(agent_diagnosis, "_get_retriever", lambda: _EvidenceRetriever())
+	monkeypatch.setattr(agent_diagnosis, "_get_engine", lambda: engine)
+	result = run_diagnosis(sample_patient_state)
+	diagnosis = result["differential_diagnosis"]
+	prompt = json.loads(engine.prompt)
+	assert prompt["system_instruction"]
+	assert prompt["evidence"][0]["evidence_id"] == "chunk-1"
+	assert diagnosis["possible_conditions"] == ["Synthetic condition"]
+	assert diagnosis["red_flags"] == ["high fever"]
+	assert diagnosis["recommended_next_action"] == "Review with Medical Officer."
+	assert diagnosis["citation_status"] == "REQUIRED_AND_PRESENT"
+
+
+class _InvalidCitationEngine:
+	def generate_json(self, _prompt, _schema, max_tokens):
+		return json.dumps(
+			{
+				"diagnoses": [
+					{
+						"rank": 1,
+						"condition_name": "Unsupported",
+						"confidence": 0.2,
+						"evidence_summary": "bad citation",
+						"citations": [
+							{
+								"source_document": "unknown",
+								"chunk_id": "missing-chunk",
+								"relevance_score": 0.5,
+							}
+						],
+					}
+				],
+				"citation_status": "REQUIRED_AND_PRESENT",
+			}
+		)
+
+
+def test_invalid_llm_citation_falls_back(sample_patient_state, monkeypatch):
+	from backend.agents import agent_diagnosis
+
+	monkeypatch.setattr(agent_diagnosis, "_get_retriever", lambda: _EvidenceRetriever())
+	monkeypatch.setattr(agent_diagnosis, "_get_engine", lambda: _InvalidCitationEngine())
+	result = run_diagnosis(sample_patient_state)
+	assert result["differential_diagnosis"]["citation_status"] == "LLM_OUTPUT_INVALID"
+	assert result["errors"][-1]["stage"] == "diagnosis"

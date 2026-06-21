@@ -1,69 +1,43 @@
-<div align="center">
+# Backend Database
 
-# 🗄️ Backend Database
+AyushBot uses SQLite with foreign-key enforcement, WAL mode, SQLAlchemy 2, and
+Alembic migrations. Timestamps are UTC Unix milliseconds to preserve Android
+sync compatibility.
 
-**SQLite Persistence & SQLAlchemy ORM for Edge Gateways**
+## Schema
 
-</div>
+Core clinical records remain in `patients`, `cases`, and `recommendations`.
+Symptoms, differential diagnoses, action plans, telemetry readings, sync
+payloads, metrics, consent evidence, and audit details use SQLAlchemy `JSON`.
+Legacy API callers may still submit serialized JSON strings; CRUD normalizes
+them before storage.
 
-## 📌 Overview
+Phase 1 also defines:
 
-The `/backend/db` module manages all local data persistence on the Raspberry Pi 4 Gateway. Because AyushBot operates offline-first, a lightweight, highly concurrent local database is mandatory.
+- `villages`, `facilities`, `road_edges`
+- `clinical_feedback`, `model_versions`
+- `devices`, `sync_resources`, `telemetry_events`
+- `fl_rounds`, `privacy_budgets`
+- `consent_records`, `audit_events`
 
-## 🧱 Database Architecture
+Enums are stored as constrained strings for SQLite portability. Foreign keys
+use explicit delete behavior, and operational query paths have named indexes.
 
-AyushBot uses **SQLite** configured in **WAL (Write-Ahead Logging)** mode. This is a critical architectural decision ensuring that simultaneous rapid bulk-inserts from reconnecting Android tablets do not block read queries from the local FastAPI service.
+## Migrations
 
-```mermaid
-erDiagram
-    PATIENT ||--o{ CASE : has
-    CASE ||--o| RECOMMENDATION : generates
-    
-    PATIENT {
-        string id PK
-        string asha_id
-        int age_months
-        string sex
-    }
-    
-    CASE {
-        string id PK
-        string patient_id FK
-        float spo2
-        float heart_rate
-        float temperature
-        string risk_tier "LOW | HIGH | CRITICAL"
-    }
-    
-    RECOMMENDATION {
-        string id PK
-        string case_id FK
-        string primary_diagnosis
-        string action_plan
-    }
+```bash
+make migrate-db
+.venv/bin/alembic -c backend/db/alembic.ini current
 ```
 
-## 🧩 Modularity
+The initial migration supports both a fresh database and the previous
+unversioned three-table schema. Application startup runs `upgrade head`.
 
-### `models.py`
-Defines the SQLAlchemy declarative base and the mapped classes. These strictly mirror the Room entities defined in the `/android/app/src/main/java/com/ayushbot/app/data/local/entity/` directory to ensure seamless offline DTN syncing.
+## Reference Data
 
-### `crud.py`
-Standard Create, Read, Update, Delete abstractions utilized by the FastAPI router injection dependency (`get_db`).
+See [data/reference/README.md](../../data/reference/README.md) for exact village
+and facility CSV/JSON formats. Seed with:
 
-### `migrations/`
-**Alembic** environment configurations. When adding a new column to the edge schema, alembic migration scripts are rolled into the master Docker container image to seamlessly upgrade existing PHC Gateways in the wild without data loss.
-
-## 🛠️ Usage
-
-```python
-# db/session.py
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
-# WAL mode is explicitly enabled in the engine connect args
-engine = create_engine(
-    "sqlite:///../../data/sqlite/ayushbot.db",
-    connect_args={"check_same_thread": False, "timeout": 15}
-)
+```bash
+make seed-db
 ```

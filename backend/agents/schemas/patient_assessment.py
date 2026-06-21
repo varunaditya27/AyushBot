@@ -8,13 +8,23 @@ from typing import Dict, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
+class VitalHistoryPoint(BaseModel):
+	timestamp_ms: int = Field(ge=0)
+	spo2: Optional[float] = Field(default=None, ge=0, le=100)
+	heart_rate: Optional[float] = Field(default=None, ge=0, le=300)
+	temperature_celsius: Optional[float] = Field(default=None, ge=20, le=50)
+	respiratory_rate: Optional[float] = Field(default=None, ge=0, le=250)
+
+
 class VitalsSnapshot(BaseModel):
 	spo2: Optional[int] = Field(default=None, ge=0, le=100)
 	heart_rate: Optional[int] = Field(default=None, ge=20, le=300)
 	temperature_celsius: Optional[float] = Field(default=None, ge=25.0, le=45.0)
+	respiratory_rate: Optional[float] = Field(default=None, ge=0, le=250)
 	weight_grams: Optional[int] = Field(default=None, ge=0, le=30000)
 	measurement_timestamp: Optional[datetime] = None
 	signal_quality: Dict[str, float] = Field(default_factory=dict)
+	history: list[VitalHistoryPoint] = Field(default_factory=list, max_length=120)
 
 
 class PatientAssessment(BaseModel):
@@ -27,6 +37,7 @@ class PatientAssessment(BaseModel):
 	asha_id: str = Field(..., min_length=1)
 	vitals: Optional[VitalsSnapshot] = None
 	asha_checklist: Dict[str, Optional[bool]] = Field(default_factory=dict)
+	diarrhea_duration_days: Optional[float] = Field(default=None, ge=0)
 	symptom_text: Optional[str] = None
 	input_language: Optional[str] = None
 

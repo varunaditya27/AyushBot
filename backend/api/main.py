@@ -9,43 +9,31 @@
 #   network at the PHC.
 #
 # APPLICATION LIFECYCLE:
-#
-#   Startup (on_startup event):
-#     1. Load configuration from config.yaml
-#     2. Initialize the SQLite database connection (via db/session.py)
-#     3. Load the XGBoost triage model (for Agent 1)
-#     4. Load the RAG pipeline (FAISS index, BM25 index, bi-encoder, reranker)
-#     5. Load the LLM model (Phi-3 Mini or Gemma-3 via llm/loader.py)
-#     6. Load language models (IndicBERT, IndicTrans2 via Agent 5 dependencies)
-#     7. Initialize the LangGraph orchestrator with all agents
-#     8. Start the FL background scheduler (Agent 4)
-#     9. Log total startup time and memory usage
-#
-#   Shutdown (on_shutdown event):
-#     1. Flush any pending FL gradient updates to disk
-#     2. Close the database connection pool
-#     3. Unload models to free memory
-#     4. Log shutdown confirmation
+#   Startup validates production security settings, runs Alembic migrations, and
+#   starts optional Redis/MQTT telemetry workers only when enabled in config.
+#   AI/RAG/FL dependencies are loaded lazily by their feature paths so the
+#   showcase backend can start without optional model artifacts.
 #
 # ROUTE REGISTRATION:
 #   The app registers the following routers:
-#     - /api/v1/triage — Patient assessment endpoints (routes/triage.py)
-#     - /api/v1/sync — Data sync endpoints for ASHA phones (routes/sync.py)
-#     - /api/v1/health — Gateway health/status endpoints (routes/health.py)
+#     - /api/v1/auth — Login, refresh, logout, and tablet provisioning
+#     - /api/v1/triage — Patient assessment endpoints
+#     - /api/v1/sync — Offline sync, manifests, downloads, and feedback
+#     - /api/v1/telemetry — Durable telemetry ingestion
+#     - /api/v1/health — Liveness/readiness/status endpoints
 #
 # MIDDLEWARE STACK:
 #   Applied in order (outermost first):
 #     1. CORS middleware — Allow requests from the local Android app
 #     2. Rate limiter — Prevent abuse (routes/middleware/rate_limiter.py)
-#     3. Request logging — Structured JSON logging for every request
-#     4. Error handler — Catch unhandled exceptions, return safe 500 responses
+#     3. Route-level exception handling — Returns safe client-facing details
 #
 # SECURITY:
 #   The API runs on the PHC's LOCAL network only (not exposed to the internet).
 #   Security layers:
-#     - HTTPS with self-signed certificates (generated during RPi setup)
-#     - API key authentication (shared secret between Android app and gateway)
-#     - Rate limiting to prevent accidental DoS from buggy app versions
+#     - HTTPS for production/showcase demos that enable TLS
+#     - ES256 JWT authentication for protected endpoints
+#     - Rate limiting to prevent accidental request floods from app bugs
 #     - Input validation via Pydantic schemas on all request bodies
 #
 # DEPLOYMENT:
@@ -62,116 +50,148 @@ from __future__ import annotations
 
 import json
 import logging
-import os
+import ssl
 import threading
-from dataclasses import dataclass
-from typing import Any, Dict, Optional
+import uuid
+from typing import Any, Dict, Optional, TYPE_CHECKING
 
-import paho.mqtt.client as mqtt
-import redis
-import yaml
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.api.routes import health, sync, telemetry, triage
 from backend.api.middleware.rate_limiter import RateLimiterMiddleware
-from backend.db.session import init_db
+from backend.api.routes import auth, health, sync, telemetry, triage
+from backend.config import MqttSettings, RedisSettings, get_settings
+from backend.db import crud
+from backend.db.session import SessionLocal, init_db
+from backend.security.transport import validate_production_security
 
 logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+	import redis
 
-def _load_config() -> Dict[str, Any]:
-	config_path = os.getenv("AYUSHBOT_CONFIG") or os.path.join(
-		os.path.dirname(__file__), "..", "config.yaml"
-	)
-	config_path = os.path.abspath(config_path)
-	if not os.path.exists(config_path):
-		logger.warning("Config file not found at %s; using defaults", config_path)
-		return {}
+
+def _load_redis_module():
 	try:
-		with open(config_path, "r", encoding="utf-8") as handle:
-			return yaml.safe_load(handle) or {}
-	except Exception as exc:  # pragma: no cover
-		logger.error("Failed to read config: %s", exc)
-		return {}
+		import redis
+	except ImportError as exc:
+		raise RuntimeError(
+			"Redis support is enabled but the 'redis' package is not installed. "
+			"Install backend optional runtime dependencies or set redis.enabled=false."
+		) from exc
+	return redis
 
 
-@dataclass
-class RedisSettings:
-	url: str
-	enabled: bool
-
-
-def _redis_settings(config: Dict[str, Any]) -> RedisSettings:
-	redis_cfg = config.get("redis", {}) if isinstance(config, dict) else {}
-	url = os.getenv("AYUSHBOT_REDIS_URL", redis_cfg.get("url", "redis://localhost:6379/0"))
-	enabled = str(os.getenv("AYUSHBOT_REDIS_ENABLED", redis_cfg.get("enabled", True))).lower() in {
-		"1",
-		"true",
-		"yes",
-		"y",
-	}
-	return RedisSettings(url=url, enabled=enabled)
-
-
-@dataclass
-class MqttSettings:
-	host: str
-	port: int
-	username: Optional[str]
-	password: Optional[str]
-	topic: str
-
-
-def _mqtt_settings(config: Dict[str, Any]) -> MqttSettings:
-	mqtt_cfg = config.get("mqtt", {}) if isinstance(config, dict) else {}
-	return MqttSettings(
-		host=os.getenv("AYUSHBOT_MQTT_HOST", mqtt_cfg.get("host", "localhost")),
-		port=int(os.getenv("AYUSHBOT_MQTT_PORT", mqtt_cfg.get("port", 1883))),
-		username=os.getenv("AYUSHBOT_MQTT_USERNAME", mqtt_cfg.get("username")),
-		password=os.getenv("AYUSHBOT_MQTT_PASSWORD", mqtt_cfg.get("password")),
-		topic=os.getenv("AYUSHBOT_MQTT_TOPIC", mqtt_cfg.get("topic", "ayushbot/telemetry/#")),
-	)
+def _load_mqtt_module():
+	try:
+		import paho.mqtt.client as mqtt
+	except ImportError as exc:
+		raise RuntimeError(
+			"MQTT support is enabled but the 'paho-mqtt' package is not installed. "
+			"Install backend optional runtime dependencies or set mqtt.enabled=false."
+		) from exc
+	return mqtt
 
 
 class RedisClient:
 	def __init__(self, settings: RedisSettings) -> None:
 		self.settings = settings
-		self._client: Optional[redis.Redis] = None
+		self._client: Optional["redis.Redis"] = None
+		self._consumer_thread: Optional[threading.Thread] = None
+		self._stop_event = threading.Event()
 		if settings.enabled:
 			try:
-				self._client = redis.Redis.from_url(settings.url, decode_responses=True)
+				redis_module = _load_redis_module()
+				self._client = redis_module.Redis.from_url(
+					settings.url, decode_responses=True
+				)
 				self._client.ping()
 				logger.info("Connected to Redis at %s", settings.url)
+			except RuntimeError:
+				raise
 			except Exception as exc:
-				logger.error("Redis unavailable: %s", exc)
-				self._client = None
+				raise RuntimeError(f"Redis is enabled but unavailable: {exc}") from exc
 
-	def push_telemetry(self, payload: Dict[str, Any]) -> None:
+	def push_telemetry(self, payload: Dict[str, Any]) -> bool:
 		if not self._client:
 			logger.warning("Skipping telemetry push; Redis not available")
-			return
+			return False
 		try:
 			self._client.rpush("ayushbot:telemetry", json.dumps(payload))
+			return True
 		except Exception as exc:
 			logger.error("Failed to push telemetry to Redis: %s", exc)
+			return False
+
+	def health_check(self) -> tuple[bool, str]:
+		if not self.settings.enabled:
+			return True, "disabled"
+		if not self._client:
+			return False, "unavailable"
+		try:
+			self._client.ping()
+		except Exception:
+			logger.exception("Redis readiness check failed")
+			return False, "unavailable"
+		return True, "ready"
+
+	def start_consumer(self) -> None:
+		if not self._client or self._consumer_thread:
+			return
+		self._stop_event.clear()
+		self._consumer_thread = threading.Thread(
+			target=self._consume_telemetry, daemon=True
+		)
+		self._consumer_thread.start()
+
+	def stop_consumer(self) -> None:
+		self._stop_event.set()
+		if self._consumer_thread and self._consumer_thread.is_alive():
+			self._consumer_thread.join(timeout=5)
+
+	def _consume_telemetry(self) -> None:
+		while not self._stop_event.is_set() and self._client:
+			try:
+				item = self._client.blpop("ayushbot:telemetry", timeout=1)
+				if item:
+					_persist_telemetry(json.loads(item[1]))
+			except Exception:
+				logger.exception("Telemetry queue consumer failed")
 
 
 class MqttListener:
 	def __init__(self, settings: MqttSettings, redis_client: RedisClient) -> None:
 		self.settings = settings
 		self.redis_client = redis_client
-		self._client = mqtt.Client()
+		self._client: Any | None = None
 		self._thread: Optional[threading.Thread] = None
 		self._stop_event = threading.Event()
+		self._connected = False
+
+		if not settings.enabled:
+			return
+
+		mqtt = _load_mqtt_module()
+		self._client = mqtt.Client()
 
 		if settings.username:
 			self._client.username_pw_set(settings.username, settings.password)
+		if settings.tls_enabled:
+			self._client.tls_set(
+				ca_certs=str(settings.ca_cert_path),
+				certfile=str(settings.client_cert_path),
+				keyfile=str(settings.client_key_path),
+				cert_reqs=ssl.CERT_REQUIRED,
+				tls_version=ssl.PROTOCOL_TLS_CLIENT,
+			)
 		self._client.on_connect = self._on_connect
 		self._client.on_message = self._on_message
 		self._client.on_disconnect = self._on_disconnect
 
 	def start(self) -> None:
+		if not self.settings.enabled:
+			logger.info("MQTT listener disabled")
+			return
 		self._stop_event.clear()
 		self._thread = threading.Thread(target=self._run, daemon=True)
 		self._thread.start()
@@ -179,13 +199,16 @@ class MqttListener:
 	def stop(self) -> None:
 		self._stop_event.set()
 		try:
-			self._client.disconnect()
+			if self._client is not None:
+				self._client.disconnect()
 		except Exception as exc:
 			logger.debug("MQTT disconnect failed: %s", exc)
 		if self._thread and self._thread.is_alive():
 			self._thread.join(timeout=5)
 
 	def _run(self) -> None:
+		if self._client is None:
+			return
 		try:
 			self._client.connect(self.settings.host, self.settings.port, keepalive=30)
 			self._client.loop_start()
@@ -202,13 +225,27 @@ class MqttListener:
 	def _on_connect(self, client, _userdata, _flags, rc) -> None:  # type: ignore[no-untyped-def]
 		if rc != 0:
 			logger.error("MQTT connect failed with code %s", rc)
+			self._connected = False
 			return
+		self._connected = True
 		client.subscribe(self.settings.topic)
 		logger.info("MQTT subscribed to %s", self.settings.topic)
 
 	def _on_disconnect(self, _client, _userdata, rc) -> None:  # type: ignore[no-untyped-def]
+		self._connected = False
 		if rc != 0:
 			logger.warning("MQTT disconnected unexpectedly (%s)", rc)
+
+	def health_check(self) -> tuple[bool, str]:
+		if not self.settings.enabled:
+			return True, "disabled"
+		if self._client is None:
+			return False, "unavailable"
+		if self._connected:
+			return True, "ready"
+		if self._thread and self._thread.is_alive():
+			return False, "connecting"
+		return False, "unavailable"
 
 	def _on_message(self, _client, _userdata, msg) -> None:  # type: ignore[no-untyped-def]
 		try:
@@ -217,43 +254,88 @@ class MqttListener:
 		except Exception:
 			data = {"raw": msg.payload.decode("utf-8", errors="ignore")}
 		data["topic"] = msg.topic
-		self.redis_client.push_telemetry(data)
+		data.setdefault("id", str(uuid.uuid4()))
+		data.setdefault("device_id", _device_id_from_topic(msg.topic))
+		data.setdefault("event_type", "mqtt")
+		data.setdefault("timestamp", int(__import__("time").time() * 1000))
+		if "readings" not in data:
+			data["readings"] = {
+				key: value
+				for key, value in data.items()
+				if key not in {"id", "device_id", "case_id", "event_type", "timestamp"}
+			}
+		if not self.redis_client.push_telemetry(data):
+			_persist_telemetry(data)
+
+
+def _device_id_from_topic(topic: str) -> str:
+	parts = [part for part in topic.split("/") if part]
+	return parts[-1][:64] if parts else "mqtt-unknown"
+
+
+def _persist_telemetry(payload: Dict[str, Any]) -> None:
+	required = {"id", "device_id", "timestamp", "readings"}
+	if not required <= payload.keys():
+		logger.warning("Discarding malformed telemetry message")
+		return
+	with SessionLocal() as db:
+		if crud.get_telemetry_event(db, str(payload["id"])):
+			return
+		try:
+			crud.create_telemetry_event(
+				db,
+				{
+					"id": str(payload["id"]),
+					"device_id": str(payload["device_id"]),
+					"case_id": payload.get("case_id"),
+					"event_type": str(payload.get("event_type", "mqtt")),
+					"timestamp": int(payload["timestamp"]),
+					"readings": payload["readings"],
+				},
+			)
+			db.commit()
+		except Exception:
+			db.rollback()
+			logger.exception("Failed to persist queued telemetry")
 
 
 def create_app() -> FastAPI:
-	config = _load_config()
-	api_cfg = config.get("api", {}) if isinstance(config, dict) else {}
-	cors_origins = api_cfg.get("cors_origins", ["*"])
+	settings = get_settings()
 
 	app = FastAPI(title="AyushBot API", version="1.0.0")
 	app.add_middleware(
 		CORSMiddleware,
-		allow_origins=cors_origins,
+		allow_origins=settings.api.cors_origins,
 		allow_credentials=True,
-		allow_methods=["*"],
-		allow_headers=["*"],
+		allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+		allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
 	)
 
 	app.add_middleware(RateLimiterMiddleware)
+	app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 	app.include_router(health.router, prefix="/api/v1/health", tags=["health"])
 	app.include_router(sync.router, prefix="/api/v1/sync", tags=["sync"])
 	app.include_router(telemetry.router, prefix="/api/v1/telemetry", tags=["telemetry"])
 	app.include_router(triage.router, prefix="/api/v1/triage", tags=["triage"])
 
-	redis_client = RedisClient(_redis_settings(config))
-	mqtt_listener = MqttListener(_mqtt_settings(config), redis_client)
+	redis_client = RedisClient(settings.redis)
+	mqtt_listener = MqttListener(settings.mqtt, redis_client)
+	app.state.settings = settings
+	app.state.redis_client = redis_client
+	app.state.mqtt_listener = mqtt_listener
 
 	@app.on_event("startup")
 	def _startup() -> None:
+		validate_production_security(settings)
 		init_db()
+		redis_client.start_consumer()
 		mqtt_listener.start()
-		app.state.redis_client = redis_client
-		app.state.mqtt_listener = mqtt_listener
 		logger.info("AyushBot API startup complete")
 
 	@app.on_event("shutdown")
 	def _shutdown() -> None:
 		mqtt_listener.stop()
+		redis_client.stop_consumer()
 		logger.info("AyushBot API shutdown complete")
 
 	return app

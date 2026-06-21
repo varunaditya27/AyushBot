@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -43,6 +43,19 @@ class RetrievalMetrics(BaseModel):
 
 class DifferentialDiagnosis(BaseModel):
 	diagnoses: List[DiagnosisEntry] = Field(..., min_length=1, max_length=5)
+	possible_conditions: List[str] = Field(default_factory=list)
+	uncertainty: str = ""
+	red_flags: List[str] = Field(default_factory=list)
+	recommended_next_action: str = "Refer to Medical Officer if symptoms worsen."
+	non_diagnostic_disclaimer: str = (
+		"Decision-support output only; not a definitive diagnosis."
+	)
+	citation_status: Literal[
+		"REQUIRED_AND_PRESENT",
+		"RAG_DISABLED",
+		"NO_EVIDENCE_RETRIEVED",
+		"LLM_OUTPUT_INVALID",
+	] = "REQUIRED_AND_PRESENT"
 	retrieval_metrics: RetrievalMetrics = Field(default_factory=RetrievalMetrics)
 	evidence_chunks_used: int = 0
 	model_confidence: float = Field(0.0, ge=0.0, le=1.0)
@@ -52,4 +65,8 @@ class DifferentialDiagnosis(BaseModel):
 		total = sum(entry.confidence for entry in self.diagnoses)
 		if total > 1.0 + 1e-6:
 			raise ValueError("Sum of diagnosis confidences must be <= 1.0")
+		if not self.possible_conditions:
+			self.possible_conditions = [
+				entry.condition_name for entry in sorted(self.diagnoses, key=lambda item: item.rank)
+			]
 		return self

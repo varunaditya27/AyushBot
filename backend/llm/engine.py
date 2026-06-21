@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple, Type
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
-import yaml
-from llama_cpp import Llama
 from pydantic import BaseModel
+
+from backend.config import load_settings
+
+if TYPE_CHECKING:
+	from llama_cpp import Llama
 
 logger = logging.getLogger(__name__)
 
@@ -25,47 +27,17 @@ class LlmConfig:
     n_gpu_layers: int
 
 
-def _load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
-    path = (
-        config_path
-        or os.getenv("AYUSHBOT_CONFIG")
-        or os.path.join(os.path.dirname(__file__), "..", "config.yaml")
-    )
-    path = os.path.abspath(path)
-    if not os.path.exists(path):
-        logger.warning("Config file not found at %s; using defaults", path)
-        return {}
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            return yaml.safe_load(handle) or {}
-    except Exception as exc:  # pragma: no cover
-        logger.error("Failed to load config: %s", exc)
-        return {}
-
-
 def _build_config(config_path: Optional[str] = None) -> LlmConfig:
-    config = _load_config(config_path)
-    llm_cfg = config.get("llm", {}) if isinstance(config, dict) else {}
-    model_path = os.getenv("AYUSHBOT_LLM_MODEL_PATH", llm_cfg.get("model_path", ""))
-    if not model_path:
-        raise ValueError("LLM model_path must be configured")
-
-    context_length = int(os.getenv("AYUSHBOT_LLM_CONTEXT", llm_cfg.get("context_length", 2048)))
-    max_tokens = int(os.getenv("AYUSHBOT_LLM_MAX_TOKENS", llm_cfg.get("max_tokens", 300)))
-    temperature = float(os.getenv("AYUSHBOT_LLM_TEMPERATURE", llm_cfg.get("temperature", 0.1)))
-    top_p = float(os.getenv("AYUSHBOT_LLM_TOP_P", llm_cfg.get("top_p", 0.9)))
-    n_threads = int(os.getenv("AYUSHBOT_LLM_THREADS", llm_cfg.get("n_threads", 2)))
-    n_gpu_layers = int(os.getenv("AYUSHBOT_LLM_GPU_LAYERS", llm_cfg.get("n_gpu_layers", 0)))
-    context_length = min(context_length, 2048)
+    llm_cfg = load_settings(config_path).llm
 
     return LlmConfig(
-        model_path=model_path,
-        context_length=context_length,
-        max_tokens=max_tokens,
-        temperature=temperature,
-        top_p=top_p,
-        n_threads=n_threads,
-        n_gpu_layers=n_gpu_layers,
+        model_path=str(llm_cfg.model_path),
+        context_length=llm_cfg.context_length,
+        max_tokens=llm_cfg.max_tokens,
+        temperature=llm_cfg.temperature,
+        top_p=llm_cfg.top_p,
+        n_threads=llm_cfg.n_threads,
+        n_gpu_layers=llm_cfg.n_gpu_layers,
     )
 
 
@@ -163,10 +135,14 @@ class LlamaEngine:
         self._model = self._load_model(self.config)
 
     @staticmethod
-    def _load_model(config: LlmConfig) -> Llama:
-        if not os.path.exists(config.model_path):
+    def _load_model(config: LlmConfig) -> "Llama":
+        from pathlib import Path
+
+        if not Path(config.model_path).exists():
             raise FileNotFoundError(f"Model file not found: {config.model_path}")
         try:
+            from llama_cpp import Llama
+
             return Llama(
                 model_path=config.model_path,
                 n_ctx=config.context_length,
@@ -175,6 +151,10 @@ class LlamaEngine:
                 logits_all=False,
                 verbose=False,
             )
+        except ImportError as exc:
+            raise RuntimeError(
+                "llama-cpp-python is not installed; install the AI dependencies to use the LLM"
+            ) from exc
         except Exception as exc:
             raise RuntimeError(f"Failed to load GGUF model: {exc}") from exc
 

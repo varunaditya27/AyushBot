@@ -1,62 +1,71 @@
-# =============================================================================
-# AyushBot — Python Project Configuration (pyproject.toml)
-# =============================================================================
-#
-# PURPOSE:
-#   Centralized Python project configuration file following PEP 621.
-#   Defines project metadata, dependencies, tool configurations (pytest,
-#   black, ruff, mypy), and build system specifications.
-#
-# SECTIONS:
-#
-#   [project]
-#     name: "ayushbot"
-#     version: "0.1.0"
-#     description: "Offline-first, privacy-preserving, multi-agent healthcare
-#       AI co-pilot for ASHA workers in rural India"
-#     requires-python: ">=3.10"
-#     license: MIT (or appropriate open-source license)
-#     authors: [AyushBot team]
-#     dependencies: (see backend/requirements.txt for the full list)
-#       Core: fastapi, uvicorn, pydantic, pyyaml
-#       ML: xgboost, scikit-learn, onnxruntime
-#       LLM: llama-cpp-python (for Phi-3 Mini GGUF inference)
-#       RAG: faiss-cpu, sentence-transformers
-#       FL: flwr (Flower framework)
-#       NLP: transformers, ai4bharat-transliteration
-#       Database: sqlalchemy, aiosqlite
-#       MQTT: paho-mqtt
-#
-#   [project.optional-dependencies]
-#     dev: pytest, pytest-asyncio, black, ruff, mypy, pre-commit
-#     ml-training: optuna, shap, matplotlib, seaborn, pandas, pyarrow
-#     cloud: streamlit (for analytics dashboard)
-#
-#   [tool.pytest.ini_options]
-#     testpaths: ["tests"]
-#     markers:
-#       slow: "Tests that take > 5 seconds (LLM inference, FL rounds)"
-#       integration: "Tests requiring multiple components or Docker"
-#       hardware: "Tests requiring physical hardware (skip in CI)"
-#       simulation: "Full ASHA scenario simulations (requires real models)"
-#     asyncio_mode: "auto"
-#
-#   [tool.black]
-#     line-length: 88
-#     target-version: ["py310"]
-#
-#   [tool.ruff]
-#     line-length: 88
-#     select: ["E", "F", "W", "I", "N", "UP", "B", "SIM"]
-#     ignore: ["E501"] (long lines — handled by black)
-#
-#   [tool.mypy]
-#     python_version: "3.10"
-#     warn_return_any: true
-#     warn_unused_configs: true
-#     ignore_missing_imports: true
-#
-#   [build-system]
-#     requires: ["setuptools>=68.0", "wheel"]
-#     build-backend: "setuptools.build_meta"
-# =============================================================================
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ayushbot"
+version = "0.1.0"
+description = "Offline-first backend foundation for the AyushBot PHC gateway"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+authors = [{ name = "AyushBot Team" }]
+dependencies = [
+    "alembic>=1.13,<2",
+    "argon2-cffi>=23.1,<26",
+    "fastapi>=0.110,<1",
+    "numpy>=1.26,<3",
+    "paho-mqtt>=2.1,<3",
+    "pydantic>=2.6,<3",
+    "PyJWT[crypto]>=2.8,<3",
+    "PyYAML>=6,<7",
+    "redis>=5,<7",
+    "SQLAlchemy>=2.0,<3",
+    "uvicorn[standard]>=0.29,<1",
+]
+
+[project.optional-dependencies]
+ai = [
+    "faiss-cpu>=1.8,<2",
+    "flwr>=1.9,<2",
+    "langgraph>=0.2,<1",
+    "llama-cpp-python>=0.2.80,<1",
+    "onnxruntime>=1.17,<2",
+    "rank-bm25>=0.2.2,<1",
+    "tokenizers>=0.19,<1",
+    "xgboost>=2.0,<4",
+]
+dev = [
+    "httpx>=0.27,<1",
+    "pytest>=8,<9",
+    "pytest-asyncio>=0.23,<1",
+    "ruff>=0.5,<1",
+]
+
+[tool.setuptools.packages.find]
+include = ["backend*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-q"
+markers = [
+    "slow: tests that take more than five seconds",
+    "integration: tests requiring multiple components",
+    "hardware: tests requiring physical hardware",
+    "simulation: full ASHA scenario simulations",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = ["android", "cloud", "firmware", "ml", "research"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+indent-style = "tab"

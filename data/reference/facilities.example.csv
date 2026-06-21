@@ -1,0 +1,2 @@
+id,name,type,village_id,latitude,longitude,address,phone,active,metadata_json
+facility-example-001,Example Primary Health Centre,PHC,village-example-001,12.3456,77.6543,Example address,,true,"{""source"":""replace-with-approved-source""}"

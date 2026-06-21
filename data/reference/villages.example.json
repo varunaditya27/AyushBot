@@ -1,0 +1,15 @@
+[
+  {
+    "id": "village-example-001",
+    "name": "Example Village",
+    "district": "Example District",
+    "state": "Example State",
+    "pincode": "000000",
+    "latitude": 12.3456,
+    "longitude": 77.6543,
+    "active": true,
+    "metadata_json": {
+      "source": "replace-with-approved-source"
+    }
+  }
+]

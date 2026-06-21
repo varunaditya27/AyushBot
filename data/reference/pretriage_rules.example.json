@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "ruleset_version": "replace-with-medically-reviewed-version",
+  "status": "DRAFT",
+  "sources": ["replace-with-exact-guideline-edition-and-section"],
+  "signal_quality": {
+    "window_readings": 10,
+    "window_seconds": 30,
+    "spo2_cv_max": 0.03,
+    "min_quality_score": null,
+    "bounds": {
+      "spo2": {"minimum": null, "maximum": null},
+      "heart_rate": {"minimum": null, "maximum": null},
+      "temperature": {"minimum": null, "maximum": null},
+      "respiratory_rate": {"minimum": null, "maximum": null},
+      "weight_kg": {"minimum": null, "maximum": null}
+    }
+  },
+  "rules": [
+    {
+      "id": "replace-me",
+      "label": "Replace with reviewed clinical rule",
+      "risk": "CRITICAL",
+      "enabled": false,
+      "conditions": [
+        {"field": "spo2", "operator": "lt", "value": null}
+      ],
+      "source": "MEDICAL REVIEW INPUT REQUIRED",
+      "medical_review_required": true
+    }
+  ]
+}

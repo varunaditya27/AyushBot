@@ -9,19 +9,21 @@
 #
 # ENDPOINTS:
 #
-#   GET /api/v1/health/ping
+#   GET /api/v1/health/live
 #     Simple liveness check. Returns 200 with {"status": "ok"}.
 #     Used by the Android app to detect gateway availability on the network.
 #     No authentication required.
 #
+#   GET /api/v1/health/ping
+#     Backward-compatible alias for /live.
+#
 #   GET /api/v1/health/ready
-#     Readiness probe. Returns 200 only if ALL critical subsystems are loaded:
+#     Readiness probe. Returns 200 only if critical enabled subsystems are ready:
 #       - Database connection: can execute a test query
-#       - XGBoost model: loaded and inference-ready
-#       - RAG pipeline: FAISS index loaded, embedder ready
-#       - LLM: model loaded and can generate a test token
-#     If any subsystem is still initializing, returns 503 with details.
-#     Used by Docker/Kubernetes to gate traffic to the container.
+#       - Redis: checked only when enabled
+#       - MQTT: checked only when enabled
+#     Disabled optional services are reported as "disabled" and do not block
+#     local showcase/development startup.
 #
 #   GET /api/v1/health/status
 #     Comprehensive diagnostic dashboard (admin-only, requires auth).
@@ -49,10 +51,11 @@
 
 from __future__ import annotations
 
+import logging
 import time
-from typing import Dict
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -60,27 +63,81 @@ from backend.db.session import get_db
 from backend.security.auth import AuthUser, Role, require_roles
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 _START_TIME = time.time()
 
 
-@router.get("/ping")
-async def ping() -> Dict[str, str]:
-	return {"status": "ok"}
+class HealthResponse(BaseModel):
+	status: str
 
 
-@router.get("/ready")
-async def ready(db: Session = Depends(get_db)) -> Dict[str, str]:
+class ComponentStatus(BaseModel):
+	status: str
+	required: bool = True
+
+
+class ReadinessResponse(HealthResponse):
+	checks: dict[str, ComponentStatus]
+
+
+class StatusResponse(HealthResponse):
+	uptime_seconds: int
+
+
+@router.get("/live", response_model=HealthResponse)
+async def live() -> HealthResponse:
+	return HealthResponse(status="ok")
+
+
+@router.get("/ping", response_model=HealthResponse, include_in_schema=False)
+async def ping() -> HealthResponse:
+	return await live()
+
+
+@router.get("/ready", response_model=ReadinessResponse)
+async def ready(request: Request, db: Session = Depends(get_db)) -> ReadinessResponse:
+	checks: dict[str, ComponentStatus] = {}
 	try:
 		db.execute(text("SELECT 1"))
 	except Exception as exc:
-		raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
-	return {"status": "ready"}
+		logger.exception("Readiness database check failed")
+		raise HTTPException(
+			status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+			detail={
+				"status": "not_ready",
+				"checks": {"database": {"status": "unavailable", "required": True}},
+			},
+		) from exc
+	checks["database"] = ComponentStatus(status="ready", required=True)
+
+	for name, required in (("redis", False), ("mqtt", False)):
+		component = getattr(request.app.state, f"{name}_client", None)
+		if name == "mqtt":
+			component = getattr(request.app.state, "mqtt_listener", None)
+		if component is None or not hasattr(component, "health_check"):
+			checks[name] = ComponentStatus(status="not_configured", required=required)
+			continue
+		ok, component_status = component.health_check()
+		checks[name] = ComponentStatus(status=component_status, required=required)
+		if required and not ok:
+			raise HTTPException(
+				status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+				detail={
+					"status": "not_ready",
+					"checks": {
+						key: value.model_dump(mode="json")
+						for key, value in checks.items()
+					},
+				},
+			)
+
+	return ReadinessResponse(status="ready", checks=checks)
 
 
-@router.get("/status")
+@router.get("/status", response_model=StatusResponse)
 async def status_report(
 	_user: AuthUser = Depends(require_roles([Role.MEDICAL_OFFICER])),
-) -> Dict[str, str]:
+) -> StatusResponse:
 	uptime = int(time.time() - _START_TIME)
-	return {"status": "ok", "uptime_seconds": str(uptime)}
+	return StatusResponse(status="ok", uptime_seconds=uptime)

@@ -1,32 +1,62 @@
-<div align="center">
+# Authentication And Transport Security
 
-# 🔒 Backend Security
+AyushBot uses database-backed local identities, Argon2id password hashes via
+`argon2-cffi`, and ES256 JWT access/refresh tokens. Passwords shorter than 12
+characters are rejected before hashing. Access and refresh JWT identifiers are
+stored only as SHA-256 hashes.
 
-**Zero-Trust Edge Authing & Identity Management**
+## Token Behavior
 
-</div>
+- Access tokens include `iss`, `aud`, `sub`, `role`, `device_id`, `kid`, `jti`,
+  `iat`, `nbf`, `exp`, and token type.
+- Every access request verifies the signature and checks the token record,
+  account, and provisioned device status.
+- Refresh tokens are single-use. Reuse revokes the complete token family and
+  creates a security audit event.
+- Logout revokes the complete family.
+- Old public keys may remain configured during rotation; only `active_kid`
+  signs new tokens.
 
-## 📌 Overview
+## Required Manual Setup
 
-The `/backend/security` directory handles all authentication, authorization, and cryptographic operations for the PHC Gateway. Because the gateway broadcasts its own local WiFi network (WLAN) to the android tablets, it must restrict API and MQTT access strictly to provisioned ASHA devices to prevent rogue actors in the vicinity from intercepting offline telemetry.
+Create the ES256 files outside the repository and install them at:
 
-## 🛡️ Security Posture
+```text
+infra/certs/jwt_gateway_2026_01_private.pem
+infra/certs/jwt_gateway_2026_01_public.pem
+```
 
-### JWT (JSON Web Tokens)
-Instead of relying on username/password combos (which are difficult to manage offline), ASHA tablets are provisioned with long-lived ECDSA JWTs when first manufactured or deployed.
-- **`auth.py`**: Interacts with the FastAPI dependency injection system (`Depends(get_current_asha)`). Decodes the JWT and validates the signature against the local `public_key.pem`.
-- **RBAC**: Implements Role-Based Access Control. `AshaWorker` tokens can sync cases, but only `MedicalOfficer` tokens can access the `/api/v1/analytics` endpoints.
+Commands are documented in [infra/certs/README.md](../../infra/certs/README.md).
+Then populate the `auth.keys` section in `backend/config.yaml`.
 
-### Let's Encrypt / Local CA
-To prevent Man-in-the-Middle (MITM) attacks on the local WLAN during MQTT synchronization:
-- If an internet connection is available, the setup script requests a Let's Encrypt certificate.
-- Otherwise, a self-signed Root CA is generated locally on the Pi and distributed to the Android tablets, ensuring secure `mqtts://` TLS 1.2+ encryption over the airgap.
+Migrate and create the first administrator interactively:
 
-## 🧩 Modularity
+```bash
+make migrate-db
+make bootstrap-admin
+```
 
-- **`jwt_handler.py`**: Encodes, decodes, and verifies cryptographic token expirations.
-- **`hashing.py`**: Uses **Argon2** for password hashing (e.g., for the Medical Officer local dashboard login).
-- **`device_fingerprint.py`**: Validates the MAC address and hardware UUID of connecting tablets to prevent token theft/replay attacks.
+The password is read with `getpass`; it is not passed on the command line or
+written to configuration. The MedicalOfficer logs in through
+`POST /api/v1/auth/login` and provisions each tablet through
+`POST /api/v1/auth/provision/tablet`.
 
-## 🔑 Key Management
-The private keys (e.g., `private_key.pem`) used to sign the tokens are strictly managed by Docker secrets and are NEVER stored in this repository or the `/data` directory.
+## Production Startup
+
+Set `environment: production`, explicit CORS origins, JWT key paths, API TLS
+paths, and MQTT mTLS paths. Startup fails when any required file is missing.
+JWT keys must be readable ES256/P-256 PEM files, and the active private key must
+match its public key.
+
+Run the API with its installed certificate and key:
+
+```bash
+.venv/bin/uvicorn backend.api.main:app \
+  --host 0.0.0.0 --port 8443 \
+  --ssl-certfile infra/certs/api_server.crt \
+  --ssl-keyfile infra/certs/api_server.key
+```
+
+Use `infra/mosquitto/mosquitto.conf` and `infra/mosquitto/acl.conf` for the
+TLS-only broker. Tablet certificate common names must equal provisioned device
+IDs.
