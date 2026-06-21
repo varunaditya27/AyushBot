@@ -15,6 +15,17 @@ interface CaseDao {
     @Query("SELECT * FROM cases WHERE id = :id")
     suspend fun getById(id: String): CaseEntity?
 
+    @Query("SELECT * FROM cases WHERE syncStatus IN ('PENDING', 'FAILED') ORDER BY updatedAt ASC LIMIT :limit")
+    suspend fun pendingForSync(limit: Int = 100): List<CaseEntity>
+
+    @Query("UPDATE cases SET syncStatus = :status, version = COALESCE(:serverVersion, version), updatedAt = COALESCE(:serverUpdatedAt, updatedAt) WHERE id = :caseId")
+    suspend fun updateSyncStatus(
+        caseId: String,
+        status: String,
+        serverVersion: Int? = null,
+        serverUpdatedAt: Long? = null,
+    )
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(caseEntity: CaseEntity)
 }

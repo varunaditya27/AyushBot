@@ -86,14 +86,14 @@
 // 4. BLE GATT CONFIGURATION
 // -----------------------------------------------------------------------------
 #define BLE_DEVICE_NAME                 "AyushBot-SensorPack"
-#define BLE_SERVICE_UUID                "a7u5hb07-0001-1000-8000-00805f9b34fb"
-#define BLE_CHAR_SPO2_UUID              "a7u5hb07-0002-1000-8000-00805f9b34fb"
-#define BLE_CHAR_HR_UUID                "a7u5hb07-0003-1000-8000-00805f9b34fb"
-#define BLE_CHAR_TEMP_UUID              "a7u5hb07-0004-1000-8000-00805f9b34fb"
-#define BLE_CHAR_WEIGHT_UUID            "a7u5hb07-0005-1000-8000-00805f9b34fb"
-#define BLE_CHAR_DANGER_UUID            "a7u5hb07-0006-1000-8000-00805f9b34fb"
-#define BLE_CHAR_AGE_UUID               "a7u5hb07-0007-1000-8000-00805f9b34fb"
-#define BLE_CHAR_SIGNAL_QUALITY_UUID    "a7u5hb07-0008-1000-8000-00805f9b34fb"
+#define BLE_SERVICE_UUID                "a7a5ab07-0001-1000-8000-00805f9b34fb"
+#define BLE_CHAR_SPO2_UUID              "a7a5ab07-0002-1000-8000-00805f9b34fb"
+#define BLE_CHAR_HR_UUID                "a7a5ab07-0003-1000-8000-00805f9b34fb"
+#define BLE_CHAR_TEMP_UUID              "a7a5ab07-0004-1000-8000-00805f9b34fb"
+#define BLE_CHAR_WEIGHT_UUID            "a7a5ab07-0005-1000-8000-00805f9b34fb"
+#define BLE_CHAR_DANGER_UUID            "a7a5ab07-0006-1000-8000-00805f9b34fb"
+#define BLE_CHAR_AGE_UUID               "a7a5ab07-0007-1000-8000-00805f9b34fb"
+#define BLE_CHAR_SIGNAL_QUALITY_UUID    "a7a5ab07-0008-1000-8000-00805f9b34fb"
 
 // -----------------------------------------------------------------------------
 // 5. TINYML MODEL PARAMETERS

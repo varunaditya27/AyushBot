@@ -2,8 +2,9 @@
 # AyushBot Backend — Root Package
 # =============================================================================
 #
-# The backend package is a Python application deployed on the PHC gateway
-# (Raspberry Pi 4). It contains:
+# The backend package is a Python application deployed on the PHC gateway host.
+# ESP32 boards act as sensor clients that send telemetry into this service; they
+# do not run the Python backend. The package contains:
 #
 #   agents/     — Five specialized clinical agents + LangGraph orchestrator
 #   rag/        — EdgeRAG retrieval pipeline (chunker, embedder, indexer, retriever, reranker)

@@ -3,7 +3,7 @@ Here's the complete, grounded mobile app design brainstorm — every screen, eve
 ***
 
 # AyushBot Android App — Design Brainstorm Document
-## Native Kotlin | Jetpack Compose | Offline-First | BLE + MQTT
+## Native Kotlin | Jetpack Compose | Offline-First | BLE + HTTP Sync
 
 ***
 
@@ -66,7 +66,7 @@ Five core entities:
 A single-time flow across 3 screens:
 1. **Language Selection** — Grid of 13 Indian language tiles with script labels and audio preview. ASHA taps her language once. Stored in DataStore Preferences, never asked again.
 2. **ASHA Profile Setup** — ASHA ID (from NHM registration), Name, PHC assigned, Village cluster. Optional phone number.
-3. **Gateway Pairing** — Scans for the PHC Gateway MQTT broker on local Wi-Fi. Auto-pairs if found. Shows "Connected to PHC: Mawlynnong PHC" confirmation or a "Skip — Work Offline" option.
+3. **Gateway Pairing** — Stores the PHC gateway HTTP base URL or discovers it on local Wi-Fi when available. Shows "Connected to PHC: Mawlynnong PHC" confirmation or a "Skip — Work Offline" option.
 
 After first launch, this never shows again. App opens directly to the Home Dashboard.
 
@@ -122,7 +122,7 @@ A grid of 20 IMCI-derived symptom cards, each with a clear icon, a short label i
 Selected symptoms are visually highlighted. A "Voice Add Symptom" button opens a speech recognition dialog for anything not in the checklist — transcribed by on-device ASR and passed to Agent 5 NER.
 
 **Step 4 — Submit and Wait**
-A clean "Analyzing..." screen with a subtle animated waveform. The app sends the case payload via MQTT to the gateway and holds the TCP connection open waiting for the streamed response. The waiting animation is designed to feel like 2 seconds even when it is 3.2 seconds. If no response in 6 seconds (gateway timeout), a fallback card shows: "Gateway unreachable — showing offline triage guidance" and presents the rule-based IMCI checklist result computed locally on-device without the LLM.
+A clean "Analyzing..." screen with a subtle animated waveform. The app computes deterministic triage locally, stores the patient/case/recommendation in Room, and marks the records `PENDING` for later sync. If the gateway is reachable, the app may optionally request a backend enhancement, but the ASHA sees the local recommendation immediately and never waits for a server to receive a diagnostic result.
 
 ***
 

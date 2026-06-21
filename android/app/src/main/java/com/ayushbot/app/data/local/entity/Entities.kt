@@ -21,7 +21,9 @@ data class PatientEntity(
     val sex: String,          // "Male" / "Female"
     val village: String? = null,
     val ashaId: String,
+    val version: Int = 1,
     val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = createdAt,
 )
 
 /**
@@ -38,7 +40,14 @@ data class CaseEntity(
     val weight: Float? = null,
     val symptoms: String = "[]",  // JSON array of symptom IDs
     val riskTier: String = "LOW", // LOW, MEDIUM, HIGH, CRITICAL
+    val riskExplanation: String = "{}",
+    val errors: String = "[]",
     val syncStatus: String = "PENDING", // PENDING, SYNCED, FAILED
+    val version: Int = 1,
+    val updatedAt: Long = timestamp,
+    val rulesetVersion: String? = "android-local-rules-v1",
+    val growthReferenceVersion: String? = null,
+    val triageModelVersion: String? = "android-deterministic-v1",
 )
 
 /**
@@ -51,13 +60,17 @@ data class RecommendationEntity(
     val primaryDiagnosis: String,
     val confidence: String = "Low", // Low, Likely, Confident
     val differentialJson: String = "[]",
-    val actionPlan: String = "",
+    val actionPlan: String = "{}",
+    val citations: String = "[]",
     val referralFacility: String? = null,
     val drugDosage: String? = null,
     val counseling: String? = null,
     val citationSource: String? = null,
     val citationText: String? = null,
+    val syncStatus: String = "PENDING",
+    val version: Int = 1,
     val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = createdAt,
 )
 
 /**

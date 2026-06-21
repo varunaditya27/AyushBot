@@ -81,6 +81,9 @@ dependencies {
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
 
+    // Offline sync
+    implementation(libs.androidx.work.runtime.ktx)
+
     // Debug
     debugImplementation(libs.androidx.ui.tooling)
 }

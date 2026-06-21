@@ -4,13 +4,17 @@ import android.content.Context
 import com.ayushbot.app.core.config.AppConfig
 import com.ayushbot.app.core.config.AppConfigLoader
 import com.ayushbot.app.data.local.AyushBotDatabase
+import com.ayushbot.app.data.remote.AuthTokenStore
+import com.ayushbot.app.data.remote.BackendApiFactory
+import com.ayushbot.app.data.repository.AuthRepository
 import com.ayushbot.app.data.repository.BackendCaseRepository
 import com.ayushbot.app.data.repository.CaseRepository
 import com.ayushbot.app.data.repository.MockCaseRepository
-import com.ayushbot.app.data.remote.BackendApiFactory
+import com.ayushbot.app.data.repository.ResourceRepository
 import com.ayushbot.app.llm.LiteRtLmChatEngine
 import com.ayushbot.app.llm.LlmChatEngine
 import com.ayushbot.app.llm.MockLlmChatEngine
+import com.ayushbot.app.sensor.SensorBleClient
 import com.ayushbot.app.voice.VoiceOrchestrator
 import com.ayushbot.app.voice.asr.AndroidSpeechRecognizerController
 import com.ayushbot.app.voice.asr.IndicConformerAsrController
@@ -31,6 +35,20 @@ import kotlinx.coroutines.SupervisorJob
 class AppContainer(context: Context) {
     val appConfig: AppConfig = AppConfigLoader(context).load()
     val database: AyushBotDatabase = AyushBotDatabase.getInstance(context)
+    val authTokenStore: AuthTokenStore = AuthTokenStore(context)
+    val backendApi = BackendApiFactory.create(
+        baseUrl = appConfig.backend.baseUrl,
+        tokenStore = authTokenStore,
+    )
+    val authRepository: AuthRepository = AuthRepository(
+        api = backendApi,
+        tokenStore = authTokenStore,
+    )
+    val sensorBleClient: SensorBleClient = SensorBleClient(context)
+    val resourceRepository: ResourceRepository = ResourceRepository(
+        context = context,
+        api = backendApi,
+    )
 
     val llmChatEngine: LlmChatEngine = if (appConfig.mock.useMockLlm) {
         MockLlmChatEngine(appConfig.llm)
@@ -42,7 +60,10 @@ class AppContainer(context: Context) {
         MockCaseRepository()
     } else {
         BackendCaseRepository(
-            api = BackendApiFactory.create(appConfig.backend.baseUrl),
+            api = backendApi,
+            patientDao = database.patientDao(),
+            caseDao = database.caseDao(),
+            recommendationDao = database.recommendationDao(),
         )
     }
 

@@ -4,9 +4,9 @@
 #
 # PURPOSE:
 #   Limits the rate of incoming HTTP requests to prevent accidental overload
-#   of the Raspberry Pi 4 gateway. Since the gateway has limited CPU and
-#   memory, uncontrolled request bursts (from buggy app versions or multiple
-#   ASHAs connecting simultaneously) could degrade triage performance.
+#   of the local PHC gateway host. Uncontrolled request bursts from buggy app
+#   versions or multiple ASHAs connecting simultaneously could degrade triage
+#   and sync performance.
 #
 # IMPLEMENTATION APPROACH:
 #   Token bucket algorithm (or sliding window counter):

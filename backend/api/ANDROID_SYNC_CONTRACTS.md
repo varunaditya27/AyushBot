@@ -3,8 +3,14 @@
 Base URL for the local gateway:
 
 ```text
-https://<gateway-host>:8443/api/v1
+Development: http://<gateway-host>:8000/api/v1
+Production-style TLS: https://<gateway-host>:8443/api/v1
 ```
+
+Android must remain offline-first. Creating a visit, computing deterministic
+triage, showing a recommendation, and storing history must work without this
+backend. These endpoints are for authentication, sync, resource updates, and
+optional heavier backend workflows once connectivity exists.
 
 All endpoints except health checks require:
 
@@ -15,6 +21,58 @@ Content-Type: application/json
 
 Timestamps are Unix epoch milliseconds. Android must retain the same UUID,
 `version`, and `updated_at` while retrying a record.
+
+## Auth
+
+```http
+POST /auth/login
+```
+
+```json
+{
+  "username": "asha-001",
+  "password": "development-password",
+  "device_id": "android-tablet-001"
+}
+```
+
+Successful response:
+
+```json
+{
+  "access_token": "<jwt>",
+  "refresh_token": "<jwt>",
+  "token_type": "bearer"
+}
+```
+
+Bad credentials, disabled users, and unknown/unassigned ASHA devices return
+HTTP `401` with a safe generic detail.
+
+```http
+POST /auth/refresh
+```
+
+```json
+{
+  "refresh_token": "<jwt>"
+}
+```
+
+Response shape matches `/auth/login`. Refresh token rotation is enabled; Android
+must replace both locally stored tokens after a successful refresh.
+
+```http
+GET /auth/me
+```
+
+```json
+{
+  "user_id": "asha-001",
+  "role": "AshaWorker",
+  "device_id": "android-tablet-001"
+}
+```
 
 ## Health Checks
 
@@ -140,6 +198,19 @@ Record statuses:
 Conflict ordering compares `(version, updated_at)`. The greater tuple wins.
 Equal tuples are idempotent and return `UNCHANGED`. A conflict does not apply
 any portion of that patient/case/recommendation record.
+
+## Optional Backend Triage
+
+Android should compute the primary offline recommendation locally. It may call
+the backend triage endpoint only as an enhancement when the gateway is reachable:
+
+```http
+POST /triage/assess
+```
+
+If the request fails, times out, or returns a server error, Android must keep and
+display its local recommendation. Backend triage responses should be saved
+locally as an enhancement and synced like any other recommendation revision.
 
 ## Download Manifest
 

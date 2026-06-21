@@ -3,6 +3,7 @@ package com.ayushbot.app.data.repository
 import com.ayushbot.app.data.model.TriageCase
 import com.ayushbot.app.data.remote.model.CaseCreateRequest
 import com.ayushbot.app.data.remote.model.RecommendationResponse
+import com.ayushbot.app.data.remote.model.SyncBatchResponse
 import com.ayushbot.app.ui.components.RiskTier
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,6 +48,18 @@ class MockCaseRepository : CaseRepository {
                 counseling = "Continue breastfeeding and offer zinc for 14 days.",
                 citationSource = "IMCI Chart Booklet",
                 citationText = "Section 5, p. 78",
+            )
+        )
+    }
+
+    override suspend fun syncPending(limit: Int): Result<SyncBatchResponse> {
+        return Result.success(
+            SyncBatchResponse(
+                idempotencyKey = "mock-sync",
+                replayed = false,
+                accepted = cases.value.count { !it.isSynced },
+                rejected = 0,
+                results = emptyList(),
             )
         )
     }

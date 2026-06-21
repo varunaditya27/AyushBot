@@ -1,0 +1,112 @@
+# Laptop/server local gateway example for Android integration.
+# Copy to a local path, for example:
+#   cp backend/config.local-gateway.example.yaml backend/config.local.yaml
+#   AYUSHBOT_CONFIG=backend/config.local.yaml python3 -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
+#
+# No secrets or private keys are included here. Generate ES256 JWT keys locally
+# before using /api/v1/auth/login with real Android devices.
+
+environment: development
+
+api:
+  host: 0.0.0.0
+  port: 8000
+  cors_origins:
+    - http://localhost
+    - http://127.0.0.1
+    - http://10.0.2.2
+  rate_limit_max_tokens: 40
+  rate_limit_refill_rate: 10.0
+  tls_cert_path: null
+  tls_key_path: null
+
+database:
+  path: var/ayushbot-local-gateway.db
+  wal_mode: true
+  journal_size_limit_mb: 50
+
+redis:
+  enabled: false
+  url: redis://127.0.0.1:6379/0
+
+mqtt:
+  # Core Android integration does not require MQTT. ESP32 sends BLE to Android.
+  # Enable only for optional direct sensor lab diagnostics.
+  enabled: false
+  host: 127.0.0.1
+  port: 1883
+  topic: ayushbot/telemetry/#
+  username: null
+  password: null
+  tls_enabled: false
+  ca_cert_path: null
+  client_cert_path: null
+  client_key_path: null
+
+triage_model:
+  enabled: true
+  path: models/triage_xgb.json
+  metadata_path: models/triage_xgb.metadata.json
+  rules_path: data/reference/pretriage_rules.json
+  growth_reference_path: data/reference/who_weight_for_age_lms.json
+  allow_draft_rules: true
+  require_reviewed_rules: false
+
+rag:
+  enabled: false
+  corpus_dir: data/corpus/cleaned_text
+  index_dir: backend/rag/index
+  model_dir: models/rag/biencoder
+  embedding_model_id: local-onnx-biencoder
+
+referral:
+  max_search_radius_km: 50.0
+  allow_out_of_radius_for_emergency: true
+
+language:
+  provider: noop
+  enabled_languages: [en, hi]
+  default_language: en
+  require_human_review_below_confidence: 0.9
+
+llm:
+  model_path: models/llm/model.gguf
+  context_length: 2048
+  max_tokens: 300
+  temperature: 0.1
+  top_p: 0.9
+  n_threads: 2
+  n_gpu_layers: 0
+
+fl:
+  enabled: false
+  training_enabled: false
+  update_representation: not_implemented
+  server_address: 127.0.0.1:8080
+  model_path: models/triage_xgb.json
+  train_data_path: var/fl_train.npz
+  eval_data_path: var/fl_eval.npz
+  queue_dir: var/fl_queue
+
+auth:
+  issuer: ayushbot-phc-gateway
+  audience: ayushbot-tablet
+  access_token_minutes: 15
+  refresh_token_days: 7
+  active_kid: local-gateway-1
+  keys: []
+  # After generating local JWT keys, fill this:
+  # keys:
+  #   - kid: local-gateway-1
+  #     public_key_path: infra/certs/jwt_gateway_2026_01_public.pem
+  #     private_key_path: infra/certs/jwt_gateway_2026_01_private.pem
+  #     active: true
+  jwt_private_key_path: null
+  jwt_public_key_path: null
+
+sync:
+  resource_dir: var/sync_resources
+  idempotency_ttl_hours: 72
+  manifest_ttl_minutes: 15
+
+road_graph_path: null

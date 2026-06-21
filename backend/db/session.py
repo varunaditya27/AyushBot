@@ -13,7 +13,7 @@
 #     during a write, which is important when Agent 4 (FL) writes training
 #     logs while Agent 1-3 are reading encounter data.
 #   - Journal size limit: 50 MB (prevents unbounded WAL growth on the
-#     RPi 4's limited SD card storage)
+#     local gateway host storage)
 #   - Foreign keys enforced: PRAGMA foreign_keys = ON
 #
 # SESSION MANAGEMENT:
@@ -35,9 +35,8 @@
 #     3. Each migration is tested in CI before deployment
 #
 # BACKUP:
-#   The database file is backed up daily to a secondary location on the
-#   RPi 4's SD card. The backup script is triggered by a systemd timer
-#   (see infra/ for deployment details).
+#   The database file should be backed up by the local deployment wrapper when
+#   persistent patient/case data is being retained.
 #
 # INPUTS:
 #   - config.yaml "database" section: db_path, wal_mode, journal_size_limit

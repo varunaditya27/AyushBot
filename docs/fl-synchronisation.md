@@ -18,13 +18,13 @@ To solve this, AyushBot utilizes a **Privacy-Preserving Federated Learning** arc
 
 ## 2. The Agentic Flow: Role of the FL Sync Agent (Agent 4)
 
-Within the PHC Gateway (Raspberry Pi 4), the multi-agent orchestrator runs continuously. While Agents 1, 2, and 3 handle immediate patient triage and diagnosis, **Agent 4** acts as the asynchronous background orchestrator for continuous learning.
+Within the PHC Gateway running on a laptop/server-class local host, the multi-agent orchestrator can run continuously when optional AI workflows are enabled. While immediate patient triage is available offline on Android, **Agent 4** acts as the asynchronous background orchestrator for continuous learning.
 
 Agent 4 is not a passive script; it is a state-aware, autonomous entity with a strict mandate: *Optimize the local model based on new clinical data, protect patient privacy, and navigate network instability to contribute to global intelligence.*
 
 ### Agent 4's Decision Space & State Machine:
 *   **Trigger Evaluation:** Agent 4 continuously monitors the local SQLite database. It calculates if a sufficient "batch" of highly confident new cases (e.g., 10-20 completed encounters) has accumulated to justify a training epoch.
-*   **Resource Monitoring:** Before initiating training, the agent checks the thermal state and CPU load of the Raspberry Pi 4. If the gateway is currently handling a live ASHA query (Agents 1-3 active), Agent 4 yields priority, queuing the training task to ensure zero latency impact on live triage.
+*   **Resource Monitoring:** Before initiating training, the agent checks host CPU/memory pressure. If the gateway is currently handling sync, resource downloads, or optional backend triage/RAG work, Agent 4 yields priority and queues training so core offline sync is not affected.
 *   **Connectivity Polling:** Agent 4 acts as a Delay-Tolerant Networking (DTN) manager. It polls the upstream cloud connection. If the connection is dead, it safely stores the quantized gradient updates with a cryptographic timestamp, waiting for the optimal transmission window (usually overnight).
 
 ***
@@ -72,7 +72,7 @@ Once the cloud server successfully aggregates a new global model generation, the
 In rural deployments, some PHC Gateways will lose power or connectivity for days. The FL architecture handles this through **Asynchronous Federated Optimization**. The cloud aggregator does not wait for all nodes to report back (which would freeze the whole system). Instead, it operates on a dynamic buffer. If a gateway comes back online after a week, its "stale" gradient update is heavily discounted by a temporal decay factor, allowing it to contribute without reverting the progress of the global model.
 
 ### Hardware Constraints & TinyML Integration
-While the heavy FL computation happens on the Raspberry Pi 4 (Layer 4), the TinyML models residing on the Arduino Sensor Packs (Layer 2) are also updated via this pipeline. When the global model derives improved thresholds for detecting low oxygen saturation based on multi-district learning, Agent 4 compiles these new thresholds into a TinyML-compatible INT8 binary, and flashes it to the Arduino over BLE the next time the ASHA connects their phone to the sensor pack.
+While any heavy FL computation happens on the local gateway host, TinyML artifacts for ESP32 sensor packs may be distributed as signed resources. Android downloads verified resources from the gateway and can apply an approved BLE OTA/update flow later; this must not block core offline diagnosis.
 
 ***
 
@@ -83,7 +83,7 @@ This FL architecture serves as a masterclass implementation of the four core com
 1.  **Computer Networks:** The entirely of the Agent 4 sync mechanism is a real-world implementation of **Delay-Tolerant Networking (DTN)**, Store-and-Forward routing, TLS 1.3 secure tunneling, and bandwidth-constrained TCP congestion control.
 2.  **Design and Analysis of Algorithms:** The cloud aggregation phase relies on **High-Dimensional Geometry and Greedy Algorithms** (like Krum for Byzantine tolerance) to find the geometric median of gradient vectors in vector space. 
 3.  **Discrete Mathematical Structures:** The application of **Differential Privacy** is deeply rooted in probability theory and discrete math, specifically analyzing Laplace and Gaussian noise distributions to guarantee mathematical bounds on data leakage.
-4.  **Internet of Things (IoT):** The cascading update from Cloud $\rightarrow$ PHC Gateway (RPi4) $\rightarrow$ ASHA Phone (Android) $\rightarrow$ Sensor Pack (Arduino) represents a flawless top-to-bottom edge-IoT ecosystem management pipeline.
+4.  **Internet of Things (IoT):** The cascading update from Cloud $\rightarrow$ PHC Gateway (laptop/server) $\rightarrow$ ASHA Phone (Android) $\rightarrow$ ESP32 Sensor Pack represents the intended edge-IoT management pipeline.
 
 ## 6. Conclusion
 

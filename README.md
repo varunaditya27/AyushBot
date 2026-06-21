@@ -16,7 +16,7 @@
 
 ## 📖 Introduction
 
-AyushBot is a unified hardware-software ecosystem designed specifically for rural Indian healthcare environments. By combining a low-cost vital sensor pack, an edge-hosted local LLM/RAG pipeline (Raspberry Pi 4 gateway), and an offline-first Android application, AyushBot enables Accredited Social Health Activists (ASHAs) to conduct high-quality, evidence-based triage without requiring persistent internet connectivity.
+AyushBot is a unified hardware-software ecosystem designed specifically for rural Indian healthcare environments. It combines a low-cost ESP32 BLE vital sensor pack, an offline-first Android application, and a local FastAPI gateway that can run on a laptop/server. Android remains the primary offline diagnosis surface: it stores visits locally first, computes deterministic triage locally, and syncs to the gateway only when connectivity is available.
 
 ## 🏗️ System Architecture
 
@@ -26,14 +26,14 @@ This monorepo is divided into specialized modular components:
 graph TD
     %% Core Nodes
     A[📱 Android App<br/>Offline-First / Voice UX]:::app
-    B[📡 PHC Gateway<br/>RPi 4 / Edge RAG / API]:::gateway
+    B[📡 PHC Gateway<br/>Laptop/Server / FastAPI / Optional RAG]:::gateway
     C[☁️ Cloud Server<br/>Federated Learning / Sync]:::cloud
     D[📟 Sensor Pack<br/>ESP32 / MAX30102 / MLX90614]:::firmware
     
     %% Relationships
-    A <-- "BLE (GATT)" --> D
-    A <-- "MQTT (Local Sync/Triage)" --> B
-    B <-- "HTTPS / DTN (Async Sync)" --> C
+    D -- "BLE GATT vitals" --> A
+    A -- "HTTP sync when available" --> B
+    B <-- "Optional FL/resource sync" --> C
     
     %% Styling
     classDef app fill:#e0f7fa,stroke:#006874,stroke-width:2px,color:#004d40;
@@ -49,7 +49,7 @@ Each directory represents a decoupled component of the system. Click on any dire
 | Directory | Core Purpose | Technologies |
 | :--- | :--- | :--- |
 | **[`/android`](android/README.md)** | 📱 The ASHA tablet interface, managing local state, UI, and BLE sensor pairing | Kotlin, Jetpack Compose, Room, WorkManager |
-| **[`/backend`](backend/README.md)** | 🧠 Edge gateway logic (RPi 4) executing LLM/RAG, Agentic protocols, and MQTT ingestion | Python, FastAPI, LangGraph, EdgeRAG, XGBoost |
+| **[`/backend`](backend/README.md)** | 🧠 Local gateway logic on laptop/server for auth, sync, resources, optional RAG/FL, and storage | Python, FastAPI, LangGraph, EdgeRAG, XGBoost |
 | **[`/cloud`](cloud/README.md)** | ☁️ Central server orchestrating cross-PHC Federated Learning and model aggregation | Python, Flower (FL), Docker |
 | **[`/firmware`](firmware/README.md)** | 📟 Embedded C++ for the wearable sensor pack handling raw physiological signal capture | PlatformIO, C++, TinyML (TFLite Micro) |
 | **[`/ml`](ml/README.md)** | 📈 Offline model training pipelines and data processing scripts for XGBoost risk markers | Scikit-learn, XGBoost, Pandas, Jupyter |

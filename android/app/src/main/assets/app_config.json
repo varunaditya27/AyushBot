@@ -6,8 +6,8 @@
     "useMockLlm": false
   },
   "backend": {
-    "baseUrl": "http://10.0.2.2:8000/",
-    "mqttBrokerUrl": "ssl://10.0.2.2:8883",
+    "baseUrl": "http://10.0.2.2:8000/api/v1/",
+    "mqttBrokerUrl": "",
     "mqttClientId": "ayushbot-android",
     "mqttUsername": "",
     "mqttPassword": ""

@@ -4,9 +4,10 @@
 #
 # PURPOSE:
 #   Creates and configures the FastAPI application instance that serves as
-#   the HTTP interface on the PHC gateway (Raspberry Pi 4). This is the
-#   process that the Android app communicates with over the local Wi-Fi
-#   network at the PHC.
+#   the HTTP interface on the PHC gateway host. This Python process runs on
+#   a laptop/desktop/server-class local host for development and showcase
+#   deployments; ESP32 boards act as sensor clients and publish telemetry
+#   into this service, they do not run the backend itself.
 #
 # APPLICATION LIFECYCLE:
 #   Startup validates production security settings, runs Alembic migrations, and
@@ -62,6 +63,7 @@ from backend.api.middleware.rate_limiter import RateLimiterMiddleware
 from backend.api.routes import auth, health, sync, telemetry, triage
 from backend.config import MqttSettings, RedisSettings, get_settings
 from backend.db import crud
+from backend.db.models import DeviceStatus, DeviceType, now_ms
 from backend.db.session import SessionLocal, init_db
 from backend.security.transport import validate_production_security
 
@@ -279,14 +281,33 @@ def _persist_telemetry(payload: Dict[str, Any]) -> None:
 		logger.warning("Discarding malformed telemetry message")
 		return
 	with SessionLocal() as db:
+		device_id = str(payload["device_id"])
 		if crud.get_telemetry_event(db, str(payload["id"])):
 			return
+		device = crud.get_device(db, device_id)
+		if device is None:
+			device = crud.register_device(
+				db,
+				{
+					"id": device_id,
+					"device_type": DeviceType.SENSOR,
+					"status": DeviceStatus.ACTIVE,
+					"display_name": f"ESP32 sensor {device_id}",
+					"last_seen_at": now_ms(),
+					"metadata_json": {"source": "mqtt", "platform": "esp32"},
+				},
+			)
+		elif device.status != DeviceStatus.ACTIVE:
+			logger.warning("Discarding telemetry from inactive device %s", device_id)
+			return
+		else:
+			device.last_seen_at = now_ms()
 		try:
 			crud.create_telemetry_event(
 				db,
 				{
 					"id": str(payload["id"]),
-					"device_id": str(payload["device_id"]),
+					"device_id": device_id,
 					"case_id": payload.get("case_id"),
 					"event_type": str(payload.get("event_type", "mqtt")),
 					"timestamp": int(payload["timestamp"]),

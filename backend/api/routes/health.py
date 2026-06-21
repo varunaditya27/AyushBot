@@ -28,7 +28,7 @@
 #   GET /api/v1/health/status
 #     Comprehensive diagnostic dashboard (admin-only, requires auth).
 #     Returns detailed system information:
-#       - system: CPU usage, memory usage, disk usage, temperature (RPi 4)
+#       - system: CPU usage, memory usage, disk usage, host temperature when available
 #       - models: loaded model names, versions, sizes, inference latencies
 #       - rag: index stats (num_chunks, index_size_bytes, last_build_time)
 #       - fl: FL training status, gradient queue size, last sync time,

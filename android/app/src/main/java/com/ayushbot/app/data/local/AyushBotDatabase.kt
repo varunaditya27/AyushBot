@@ -2,8 +2,10 @@ package com.ayushbot.app.data.local
 
 import android.content.Context
 import androidx.room.Database
+import androidx.room.migration.Migration
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.ayushbot.app.data.local.dao.CaseDao
 import com.ayushbot.app.data.local.dao.FacilityDao
 import com.ayushbot.app.data.local.dao.PatientDao
@@ -23,7 +25,7 @@ import com.ayushbot.app.data.local.entity.VoiceTurnEntity
         FacilityEntity::class,
         VoiceTurnEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class AyushBotDatabase : RoomDatabase() {
@@ -43,9 +45,32 @@ abstract class AyushBotDatabase : RoomDatabase() {
                     context.applicationContext,
                     AyushBotDatabase::class.java,
                     "ayushbot.db",
-                ).fallbackToDestructiveMigration(dropAllTables = true)
+                ).addMigrations(MIGRATION_1_2)
                     .build()
                     .also { instance = it }
+            }
+        }
+
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE patients ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE patients ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("UPDATE patients SET updatedAt = createdAt WHERE updatedAt = 0")
+
+                db.execSQL("ALTER TABLE cases ADD COLUMN riskExplanation TEXT NOT NULL DEFAULT '{}'")
+                db.execSQL("ALTER TABLE cases ADD COLUMN errors TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL("ALTER TABLE cases ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE cases ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE cases ADD COLUMN rulesetVersion TEXT")
+                db.execSQL("ALTER TABLE cases ADD COLUMN growthReferenceVersion TEXT")
+                db.execSQL("ALTER TABLE cases ADD COLUMN triageModelVersion TEXT")
+                db.execSQL("UPDATE cases SET updatedAt = timestamp WHERE updatedAt = 0")
+
+                db.execSQL("ALTER TABLE recommendations ADD COLUMN citations TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL("ALTER TABLE recommendations ADD COLUMN syncStatus TEXT NOT NULL DEFAULT 'PENDING'")
+                db.execSQL("ALTER TABLE recommendations ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE recommendations ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("UPDATE recommendations SET updatedAt = createdAt WHERE updatedAt = 0")
             }
         }
     }

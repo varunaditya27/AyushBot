@@ -2,6 +2,7 @@ package com.ayushbot.app
 
 import android.app.Application
 import com.ayushbot.app.core.di.AppContainer
+import com.ayushbot.app.sync.SyncCasesWorker
 
 /**
  * AyushBot Application class.
@@ -14,6 +15,6 @@ class AyushBotApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         appContainer = AppContainer(this)
-        // Room database initialization and WorkManager sync can be wired here.
+        SyncCasesWorker.enqueue(this)
     }
 }
