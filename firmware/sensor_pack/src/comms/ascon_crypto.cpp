@@ -1,58 +1,88 @@
-// =============================================================================
-// AyushBot Sensor Pack — ASCON-128 Lightweight Encryption Module
-// =============================================================================
-//
-// PURPOSE:
-//   Implements ASCON-128 authenticated encryption with associated data (AEAD)
-//   for securing vital sign payloads transmitted over BLE from the sensor pack
-//   to the ASHA's Android phone. ASCON was selected as the NIST Lightweight
-//   Cryptography Standard in 2023, making it the recommended cipher for
-//   resource-constrained IoT devices.
-//
-// WHY ASCON INSTEAD OF AES/TLS:
-//   - Standard TLS 1.2/1.3 is too compute-intensive for the Arduino's
-//     Cortex-M4 processor (40-60 ms overhead per handshake vs <10 ms for ASCON)
-//   - AES-128-GCM requires hardware AES support or large lookup tables;
-//     ASCON achieves comparable security with a fraction of the code size
-//     and CPU cycles.
-//   - ASCON is specifically designed for constrained environments: its
-//     permutation-based design uses only bitwise operations (AND, XOR, rotate),
-//     no S-boxes or multiplication — perfect for microcontrollers.
-//   - Published benchmarks on Raspberry Pi show ASCON achieving <10 ms RTT
-//     overhead vs TLS's 40-60 ms for a 512-byte vital-sign payload.
-//
-// SECURITY PROPERTIES:
-//   - ASCON-128 provides 128-bit security for both confidentiality and
-//     authenticity (AEAD mode).
-//   - The 128-bit authentication tag ensures the phone can verify that the
-//     payload has not been tampered with in transit.
-//   - Associated Data (AD) field carries the unencrypted packet header
-//     (sensor pack ID, sequence number) for replay attack prevention.
-//
-// KEY MANAGEMENT:
-//   For the prototype:
-//     - A pre-shared 128-bit key is hardcoded (in config.h or stored in flash)
-//     - The same key is provisioned into the Android app at pairing time
-//   For production:
-//     - Key exchange via BLE Secure Connection (ECDH) at initial pairing
-//     - Keys rotated periodically or per session
-//     - Option to use the nRF52840's ARM CryptoCell hardware secure element
-//
-// NONCE MANAGEMENT:
-//   - ASCON-128 requires a 128-bit nonce that must never be reused with the
-//     same key. The nonce is constructed from:
-//       [device_id (32 bits) | boot_counter (32 bits) | packet_counter (64 bits)]
-//   - The packet counter is monotonically incrementing and persisted in flash
-//     across reboots to guarantee uniqueness.
-//
-// INTERFACE:
-//   - init(key): Initialize ASCON context with the 128-bit pre-shared key
-//   - encrypt(plaintext, plaintext_len, ad, ad_len, nonce) -> ciphertext + tag
-//   - decrypt(ciphertext, ct_len, ad, ad_len, nonce, tag) -> plaintext or FAIL
-//   - generateNonce() -> fresh 128-bit nonce using device_id + counters
-//
-// IMPLEMENTATION NOTE:
-//   Uses the reference ASCON-128 C implementation from the NIST submission
-//   (https://github.com/ascon/ascon-c), adapted for Arduino's toolchain.
-//   The entire ASCON library compiles to approximately 2 KB of Flash.
-// =============================================================================
+#include "ascon_crypto.h"
+#include "../config.h"
+
+#define ASCON_128_RATE      8
+#define ASCON_128_PA_ROUNDS 12
+#define ASCON_128_PB_ROUNDS 6
+
+struct AsconState { uint64_t x[5]; };
+
+static inline uint64_t rotr64(uint64_t x, int n) {
+    return (x >> n) | (x << (64 - n));
+}
+
+static void asconPermutation(AsconState& s, int rounds) {
+    static const uint64_t RC[12] = {
+        0xf0,0xe1,0xd2,0xc3,0xb4,0xa5,0x96,0x87,0x78,0x69,0x5a,0x4b
+    };
+    for (int r = 12 - rounds; r < 12; r++) {
+        s.x[2] ^= RC[r];
+        s.x[0] ^= s.x[4]; s.x[4] ^= s.x[3]; s.x[2] ^= s.x[1];
+        uint64_t t[5];
+        for (int i=0;i<5;i++) t[i]=~s.x[i];
+        s.x[0]^=t[1]&s.x[1]; s.x[1]^=t[2]&s.x[2];
+        s.x[2]^=t[3]&s.x[3]; s.x[3]^=t[4]&s.x[4]; s.x[4]^=t[0]&s.x[0];
+        s.x[1]^=s.x[0]; s.x[0]^=s.x[4]; s.x[3]^=s.x[2]; s.x[2]=~s.x[2];
+        s.x[0]^=rotr64(s.x[0],19)^rotr64(s.x[0],28);
+        s.x[1]^=rotr64(s.x[1],61)^rotr64(s.x[1],39);
+        s.x[2]^=rotr64(s.x[2], 1)^rotr64(s.x[2], 6);
+        s.x[3]^=rotr64(s.x[3],10)^rotr64(s.x[3],17);
+        s.x[4]^=rotr64(s.x[4], 7)^rotr64(s.x[4],41);
+    }
+}
+
+bool AsconCrypto::init(const uint8_t key[ASCON_KEY_LEN]) {
+    memcpy(_key, key, ASCON_KEY_LEN);
+    _packetCounter = 0; _bootCounter++;
+    Serial.println("[ASCON] Encryption context initialised");
+    return true;
+}
+
+void AsconCrypto::generateNonce(uint8_t nonce[ASCON_NONCE_LEN]) {
+    uint32_t devId = DEVICE_ID;
+    memcpy(nonce,     &devId,          4);
+    memcpy(nonce+4,   &_bootCounter,   4);
+    memcpy(nonce+8,   &_packetCounter, 8);
+    _packetCounter++;
+}
+
+size_t AsconCrypto::encrypt(
+    const uint8_t* pt, size_t pt_len,
+    const uint8_t* ad, size_t ad_len,
+    const uint8_t  nonce[ASCON_NONCE_LEN],
+    uint8_t* out)
+{
+    AsconState s;
+    s.x[0] = 0x80400c0600000000ULL;
+    memcpy(&s.x[1],_key,8); memcpy(&s.x[2],_key+8,8);
+    memcpy(&s.x[3],nonce,8); memcpy(&s.x[4],nonce+8,8);
+    asconPermutation(s, ASCON_128_PA_ROUNDS);
+    s.x[3]^=((uint64_t*)_key)[0]; s.x[4]^=((uint64_t*)_key)[1];
+
+    if (ad_len > 0) {
+        size_t off=0;
+        while (off < ad_len) {
+            uint64_t blk=0; size_t chunk=min((size_t)8,ad_len-off);
+            memcpy(&blk,ad+off,chunk);
+            if(chunk<8) blk^=(0x80ULL<<(56-chunk*8));
+            s.x[0]^=blk; asconPermutation(s,ASCON_128_PB_ROUNDS); off+=chunk;
+        }
+    }
+    s.x[4]^=1ULL;
+
+    size_t off=0;
+    while (off < pt_len) {
+        uint64_t blk=0; size_t chunk=min((size_t)8,pt_len-off);
+        memcpy(&blk,pt+off,chunk);
+        if(chunk<8) blk^=(0x80ULL<<(56-chunk*8));
+        s.x[0]^=blk; memcpy(out+off,&s.x[0],chunk);
+        if(chunk==8) asconPermutation(s,ASCON_128_PB_ROUNDS);
+        off+=chunk;
+    }
+
+    s.x[1]^=((uint64_t*)_key)[0]; s.x[2]^=((uint64_t*)_key)[1];
+    asconPermutation(s,ASCON_128_PA_ROUNDS);
+    s.x[3]^=((uint64_t*)_key)[0]; s.x[4]^=((uint64_t*)_key)[1];
+    memcpy(out+pt_len,&s.x[3],8); memcpy(out+pt_len+8,&s.x[4],8);
+    return pt_len + ASCON_TAG_LEN;
+}
