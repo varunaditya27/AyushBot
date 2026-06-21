@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
@@ -33,6 +35,7 @@ import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Sync
+import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -65,6 +68,7 @@ import com.ayushbot.app.core.di.LocalAppContainer
 import com.ayushbot.app.llm.LlmStatus
 import com.ayushbot.app.ui.components.ErrorStateCard
 import com.ayushbot.app.ui.components.OfflineStateCard
+import com.ayushbot.app.ui.components.PlaybackStateCard
 import com.ayushbot.app.ui.theme.AyushBotDesignSystem
 import com.ayushbot.app.ui.voice.ChatMessage
 import com.ayushbot.app.ui.voice.VoiceQueryViewModel
@@ -77,16 +81,17 @@ fun VoiceQueryScreen(
 ) {
     val spacing = AyushBotDesignSystem.spacing
     val appContainer = LocalAppContainer.current
+    val context = LocalContext.current
     val viewModel: VoiceQueryViewModel = viewModel(
         factory = VoiceQueryViewModelFactory(
             chatEngine = appContainer.llmChatEngine,
             appConfig = appContainer.appConfig,
             voiceOrchestrator = appContainer.voiceOrchestrator,
             voiceTurnDao = appContainer.database.voiceTurnDao(),
+            context = context.applicationContext,
         ),
     )
     val uiState by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
     val micPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = viewModel::onMicPermissionResult,
@@ -122,33 +127,6 @@ fun VoiceQueryScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back")
-                    }
-                },
-                actions = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
-                        AssistChip(
-                            onClick = viewModel::toggleOffline,
-                            label = {
-                                Text(if (isOffline) "Offline" else "Online")
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Rounded.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
-                            },
-                        )
-                        AssistChip(
-                            onClick = { },
-                            label = { Text(llmStatusLabel(uiState.llmStatus)) },
-                            leadingIcon = {
-                                Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
-                            },
-                        )
-                        AssistChip(
-                            onClick = { },
-                            label = { Text(voiceStatusLabel(uiState.voiceEngine, uiState.isSpeaking)) },
-                            leadingIcon = {
-                                Icon(Icons.Rounded.Mic, contentDescription = null, modifier = Modifier.size(16.dp))
-                            },
-                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -245,13 +223,59 @@ fun VoiceQueryScreen(
         },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(horizontal = spacing.lg, vertical = spacing.md),
-            verticalArrangement = Arrangement.spacedBy(spacing.md),
         ) {
+            // Dedicated status indicator row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = spacing.lg, vertical = spacing.xs),
+                horizontalArrangement = Arrangement.spacedBy(spacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AssistChip(
+                    onClick = viewModel::toggleLanguage,
+                    label = { Text(uiState.voiceLanguageLabel) },
+                    leadingIcon = {
+                        Icon(Icons.Rounded.Translate, contentDescription = "Toggle Language", modifier = Modifier.size(16.dp))
+                    },
+                )
+                AssistChip(
+                    onClick = viewModel::toggleOffline,
+                    label = {
+                        Text(if (isOffline) "Offline" else "Online")
+                    },
+                    leadingIcon = {
+                        Icon(Icons.Rounded.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                    },
+                )
+                AssistChip(
+                    onClick = { },
+                    label = { Text(llmStatusLabel(uiState.llmStatus)) },
+                    leadingIcon = {
+                        Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                    },
+                )
+                AssistChip(
+                    onClick = { },
+                    label = { Text(voiceStatusLabel(uiState.voiceEngine, uiState.isSpeaking)) },
+                    leadingIcon = {
+                        Icon(Icons.Rounded.Mic, contentDescription = null, modifier = Modifier.size(16.dp))
+                    },
+                )
+            }
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(horizontal = spacing.lg, vertical = spacing.md),
+                verticalArrangement = Arrangement.spacedBy(spacing.md),
+            ) {
             if (isOffline) {
                 item {
                     OfflineStateCard(
@@ -332,11 +356,11 @@ fun VoiceQueryScreen(
 
             if (uiState.isSpeaking) {
                 item {
-                    ErrorStateCard(
+                    PlaybackStateCard(
                         title = "Reading response aloud",
                         subtitle = "Tap stop if the playback is no longer needed.",
                         actionLabel = "Stop",
-                        onRetry = viewModel::stopSpeaking,
+                        onStop = viewModel::stopSpeaking,
                     )
                 }
             }
@@ -358,6 +382,7 @@ fun VoiceQueryScreen(
             }
         }
     }
+}
 }
 
 private fun llmStatusLabel(status: LlmStatus): String {

@@ -3,6 +3,7 @@ package com.ayushbot.app.ui.screens
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -20,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 
 // ═══════════════════════════════════════════════════════════════
 // OnboardingScreen — 3-step first-launch flow:
@@ -104,10 +106,22 @@ fun OnboardingScreen(
                         onNext = { step = 2 },
                         onBack = { step = 0 },
                     )
-                    2 -> GatewayPairingStep(
-                        onComplete = onComplete,
-                        onBack = { step = 1 },
-                    )
+                    2 -> {
+                        val context = LocalContext.current
+                        GatewayPairingStep(
+                            onComplete = {
+                                val prefs = context.getSharedPreferences("ayushbot_prefs", android.content.Context.MODE_PRIVATE)
+                                val editor = prefs.edit()
+                                editor.putString("selected_language", selectedLanguage ?: "en")
+                                editor.putString("asha_name", ashaName)
+                                editor.putString("asha_id", ashaId)
+                                editor.putString("phc_name", phcName)
+                                editor.apply()
+                                onComplete()
+                            },
+                            onBack = { step = 1 },
+                        )
+                    }
                 }
             }
         }
@@ -231,56 +245,64 @@ private fun ProfileSetupStep(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .imePadding()
+            .navigationBarsPadding()
             .padding(24.dp),
     ) {
-        Spacer(Modifier.height(32.dp))
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(androidx.compose.foundation.rememberScrollState()),
+        ) {
+            Spacer(Modifier.height(32.dp))
 
-        Text(
-            text = "ASHA Profile",
-            style = MaterialTheme.typography.headlineLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+            Text(
+                text = "ASHA Profile",
+                style = MaterialTheme.typography.headlineLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
 
-        Text(
-            text = "Set up your worker profile",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+            Text(
+                text = "Set up your worker profile",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
-        Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(32.dp))
 
-        OutlinedTextField(
-            value = ashaName,
-            onValueChange = onNameChange,
-            label = { Text("Full Name") },
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            singleLine = true,
-        )
+            OutlinedTextField(
+                value = ashaName,
+                onValueChange = onNameChange,
+                label = { Text("Full Name") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+                singleLine = true,
+            )
 
-        Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
 
-        OutlinedTextField(
-            value = ashaId,
-            onValueChange = onIdChange,
-            label = { Text("ASHA ID (from NHM registration)") },
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            singleLine = true,
-        )
+            OutlinedTextField(
+                value = ashaId,
+                onValueChange = onIdChange,
+                label = { Text("ASHA ID (from NHM registration)") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+                singleLine = true,
+            )
 
-        Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
 
-        OutlinedTextField(
-            value = phcName,
-            onValueChange = onPhcChange,
-            label = { Text("Assigned PHC") },
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            singleLine = true,
-        )
-
-        Spacer(Modifier.weight(1f))
+            OutlinedTextField(
+                value = phcName,
+                onValueChange = onPhcChange,
+                label = { Text("Assigned PHC") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+                singleLine = true,
+            )
+            
+            Spacer(Modifier.height(24.dp))
+        }
 
         Row(
             modifier = Modifier.fillMaxWidth(),

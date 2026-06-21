@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
 
 // ═══════════════════════════════════════════════════════════════
@@ -100,13 +101,40 @@ fun AyushBotTheme(
         }
     }
 
+    val context = LocalContext.current
+    val currentMultiplier = androidx.compose.runtime.remember(context) {
+        val prefs = context.getSharedPreferences("ayushbot_prefs", android.content.Context.MODE_PRIVATE)
+        val selectedLanguage = prefs.getString("selected_language", null)
+            ?: java.util.Locale.getDefault().language
+        lineHeightMultiplierForLanguage(selectedLanguage)
+    }
+    val localeTypography = androidx.compose.runtime.remember(currentMultiplier) {
+        androidx.compose.material3.Typography(
+            displayLarge = AyushBotTypography.displayLarge.withLocaleAwareLineHeight(currentMultiplier),
+            displayMedium = AyushBotTypography.displayMedium.withLocaleAwareLineHeight(currentMultiplier),
+            displaySmall = AyushBotTypography.displaySmall.withLocaleAwareLineHeight(currentMultiplier),
+            headlineLarge = AyushBotTypography.headlineLarge.withLocaleAwareLineHeight(currentMultiplier),
+            headlineMedium = AyushBotTypography.headlineMedium.withLocaleAwareLineHeight(currentMultiplier),
+            headlineSmall = AyushBotTypography.headlineSmall.withLocaleAwareLineHeight(currentMultiplier),
+            titleLarge = AyushBotTypography.titleLarge.withLocaleAwareLineHeight(currentMultiplier),
+            titleMedium = AyushBotTypography.titleMedium.withLocaleAwareLineHeight(currentMultiplier),
+            titleSmall = AyushBotTypography.titleSmall.withLocaleAwareLineHeight(currentMultiplier),
+            bodyLarge = AyushBotTypography.bodyLarge.withLocaleAwareLineHeight(currentMultiplier),
+            bodyMedium = AyushBotTypography.bodyMedium.withLocaleAwareLineHeight(currentMultiplier),
+            bodySmall = AyushBotTypography.bodySmall.withLocaleAwareLineHeight(currentMultiplier),
+            labelLarge = AyushBotTypography.labelLarge.withLocaleAwareLineHeight(currentMultiplier),
+            labelMedium = AyushBotTypography.labelMedium.withLocaleAwareLineHeight(currentMultiplier),
+            labelSmall = AyushBotTypography.labelSmall.withLocaleAwareLineHeight(currentMultiplier),
+        )
+    }
+
     CompositionLocalProvider(
         LocalAyushBotSpacing provides AyushBotSpacing(),
         LocalAyushBotMotion provides AyushBotMotion(),
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
-            typography = AyushBotTypography,
+            typography = localeTypography,
             shapes = AyushBotShapes,
             content = content,
         )

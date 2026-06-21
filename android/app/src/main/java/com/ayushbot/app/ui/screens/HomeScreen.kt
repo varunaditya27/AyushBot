@@ -94,14 +94,14 @@ fun HomeScreen(
         },
         floatingActionButton = {
             LargeFloatingActionButton(
-                onClick = onNewVisit,
+                onClick = onVoiceQuery,
                 shape = CircleShape,
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
             ) {
                 Icon(
                     Icons.Rounded.Mic,
-                    contentDescription = "New Visit",
+                    contentDescription = "Voice Assistant",
                     modifier = Modifier.size(32.dp),
                 )
             }

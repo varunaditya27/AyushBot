@@ -67,6 +67,7 @@ class VoiceQueryViewModel(
     private val appConfig: AppConfig,
     private val voiceOrchestrator: VoiceOrchestrator,
     private val voiceTurnDao: VoiceTurnDao,
+    private val context: android.content.Context,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(VoiceQueryUiState())
     val uiState: StateFlow<VoiceQueryUiState> = _uiState.asStateFlow()
@@ -115,6 +116,29 @@ class VoiceQueryViewModel(
 
     fun toggleOffline() {
         _uiState.update { it.copy(isOffline = !it.isOffline) }
+    }
+
+    fun selectLanguage(languageId: String) {
+        val nextLang = appConfig.voice.languages.firstOrNull { it.id == languageId } ?: return
+        val prefs = context.getSharedPreferences("ayushbot_prefs", android.content.Context.MODE_PRIVATE)
+        prefs.edit().putString("selected_language", nextLang.id).apply()
+        _uiState.update {
+            it.copy(
+                voiceLanguageId = nextLang.id,
+                voiceLanguageTag = nextLang.bcp47,
+                voiceLanguageLabel = nextLang.label
+            )
+        }
+        initializeVoiceState()
+    }
+
+    fun toggleLanguage() {
+        val languages = appConfig.voice.languages
+        if (languages.isEmpty()) return
+        val currentIndex = languages.indexOfFirst { it.id == _uiState.value.voiceLanguageId }
+        val nextIndex = if (currentIndex == -1 || currentIndex == languages.lastIndex) 0 else currentIndex + 1
+        val nextLang = languages[nextIndex]
+        selectLanguage(nextLang.id)
     }
 
     fun onMicTapped(hasMicPermission: Boolean) {
@@ -236,12 +260,22 @@ class VoiceQueryViewModel(
             val languageId = _uiState.value.voiceLanguageId
             val languageTag = _uiState.value.voiceLanguageTag
 
+            val languageDirective = when (languageId) {
+                "hi" -> " (Respond only in Hindi language using Devanagari script)"
+                "kn" -> " (Respond only in Kannada language using Kannada script)"
+                "te" -> " (Respond only in Telugu language using Telugu script)"
+                "ta" -> " (Respond only in Tamil language using Tamil script)"
+                "bn" -> " (Respond only in Bengali language using Bengali script)"
+                else -> ""
+            }
+            val finalPrompt = prompt + languageDirective
+
             try {
                 _uiState.update { it.copy(llmStatus = LlmStatus.Loading) }
                 chatEngine.initialize()
                 _uiState.update { it.copy(llmStatus = LlmStatus.Ready) }
 
-                chatEngine.streamReply(prompt).collect { chunk ->
+                chatEngine.streamReply(finalPrompt).collect { chunk ->
                     assistantText += chunk
                     _uiState.update { state ->
                         state.copy(messages = state.messages.map { message ->
@@ -402,7 +436,8 @@ class VoiceQueryViewModel(
     }
 
     private fun resolveDefaultLanguage(): VoiceLanguage {
-        val configured = appConfig.voice.defaultLanguage
+        val prefs = context.getSharedPreferences("ayushbot_prefs", android.content.Context.MODE_PRIVATE)
+        val configured = prefs.getString("selected_language", appConfig.voice.defaultLanguage) ?: appConfig.voice.defaultLanguage
         val languages = appConfig.voice.languages
         return languages.firstOrNull { it.id == configured }
             ?: languages.firstOrNull()
@@ -465,11 +500,12 @@ class VoiceQueryViewModelFactory(
     private val appConfig: AppConfig,
     private val voiceOrchestrator: VoiceOrchestrator,
     private val voiceTurnDao: VoiceTurnDao,
+    private val context: android.content.Context,
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(VoiceQueryViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return VoiceQueryViewModel(chatEngine, appConfig, voiceOrchestrator, voiceTurnDao) as T
+            return VoiceQueryViewModel(chatEngine, appConfig, voiceOrchestrator, voiceTurnDao, context) as T
         }
         error("Unknown ViewModel class")
     }

@@ -67,6 +67,7 @@ class AndroidSpeechRecognizerController(
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageId)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, languageId)
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
             putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, offlineOnly)
         }
