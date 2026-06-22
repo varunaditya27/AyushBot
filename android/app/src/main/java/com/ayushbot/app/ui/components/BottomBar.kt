@@ -40,7 +40,7 @@ fun AyushBottomBar(
     modifier: Modifier = Modifier,
 ) {
     NavigationBar(
-        modifier = modifier.height(80.dp),
+        modifier = modifier,
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 2.dp,
     ) {
