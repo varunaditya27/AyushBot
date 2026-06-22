@@ -1,0 +1,589 @@
+% !TeX program = pdflatex
+\documentclass[12pt,a4paper,openany]{report}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{setspace}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{enumitem}
+\usepackage{amsmath,amssymb}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,shapes.misc,fit,calc}
+\pgfplotsset{compat=1.18}
+\graphicspath{{./}{docs/}{assets/}{docs/assets/}{../ml/charts/}{ml/charts/}{../ml/charts/perplexity/}{ml/charts/perplexity/}}
+
+\geometry{left=1.25in,right=0.9in,top=0.9in,bottom=0.9in,headheight=15pt,headsep=18pt}
+\setstretch{1.22}
+\setlength{\parskip}{0pt}
+\sloppy
+\emergencystretch=2em
+\raggedbottom
+\setlist[itemize]{noitemsep,topsep=3pt}
+\setlist[enumerate]{noitemsep,topsep=3pt}
+\captionsetup{font=small,skip=4pt}
+\setlength{\textfloatsep}{8pt plus 2pt minus 2pt}
+\setlength{\floatsep}{8pt plus 2pt minus 2pt}
+\setlength{\intextsep}{8pt plus 2pt minus 2pt}
+\renewcommand{\topfraction}{0.95}
+\renewcommand{\bottomfraction}{0.85}
+\renewcommand{\textfraction}{0.08}
+\renewcommand{\floatpagefraction}{0.8}
+\setcounter{topnumber}{5}
+\setcounter{bottomnumber}{5}
+\setcounter{totalnumber}{8}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=black,
+  urlcolor=black,
+  pdftitle={AyushBot Experiential Learning Report},
+  pdfauthor={R.V. College of Engineering}
+}
+
+\definecolor{lightgraybox}{gray}{0.94}
+\definecolor{midgraybox}{gray}{0.86}
+
+\titleformat{\chapter}[hang]{\bfseries\Large\color{black}}{\thechapter.}{0.75em}{}
+\titleformat{\section}[hang]{\bfseries\large\color{black}}{\thesection}{0.75em}{}
+\titleformat{\subsection}[hang]{\bfseries\normalsize\color{black}}{\thesubsection}{0.75em}{}
+\titlespacing*{\chapter}{0pt}{-4pt}{12pt}
+\titlespacing*{\section}{0pt}{8pt plus 2pt minus 1pt}{4pt}
+\titlespacing*{\subsection}{0pt}{6pt plus 2pt minus 1pt}{3pt}
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small AyushBot Experiential Learning Report}
+\rhead{\small R.V. College of Engineering}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\newcommand{\projecttitle}{AyushBot: A Privacy-Preserving Federated Multi-Agent EdgeRAG Co-Pilot for Offline-First Rural Primary-Care Triage in India}
+\newcommand{\academicyear}{2025--2026}
+\newcommand{\studentnames}{Name(s) of Student(s)}
+\newcommand{\usn}{USN(s)}
+\newcommand{\mentor}{Name, Designation and Department}
+
+\begin{document}
+
+\begin{titlepage}
+  \centering
+  \thispagestyle{empty}
+  \vspace*{0.18in}
+  {\Large \textbf{DEPARTMENT OF INFORMATION SCIENCE AND ENGINEERING}}\\[1.0cm]
+
+  \begin{minipage}{0.88\textwidth}
+    \centering
+    {\large \textbf{\projecttitle}}
+  \end{minipage}\\[0.45cm]
+
+  {\Large Experiential Learning}\\[0.1cm]
+  {\Large \textbf{REPORT}}\\[0.85cm]
+
+  {\itshape Submitted by}\\[0.25cm]
+
+  \renewcommand{\arraystretch}{1.35}
+  \begin{tabular}{|p{0.44\textwidth}|p{0.24\textwidth}|}
+    \hline
+    \centering\textbf{Name} & \centering\arraybackslash\textbf{USN}\\
+    \hline
+    Samanvitha L & 1RV24IS106\\ \hline
+    Varun Aditya & 1RV24IS143\\ \hline
+    Priyanka M Mundargi & 1RV24IS096\\ \hline
+    Tanisha R & 1RV24IS137\\ \hline
+  \end{tabular}\\[0.55cm]
+
+  {\itshape Under the guidance of}\\[0.15cm]
+  {\large \textbf{Name of the Guide}}\\[0.65cm]
+
+  {\itshape In partial fulfilment for the award of degree of}\\[0.2cm]
+  {\large Bachelor of Engineering}\\[0.1cm]
+  {in}\\[0.1cm]
+  {\large Department of Information Science and Engineering}\\[0.25cm]
+  {\large \textbf{\academicyear}}
+  \renewcommand{\arraystretch}{1}
+\end{titlepage}
+
+\pagenumbering{roman}
+
+\chapter*{CERTIFICATE}
+\thispagestyle{plain}
+Certified that the project work titled \textbf{\textit{\projecttitle}} is carried out by \textbf{Samanvitha L (1RV24IS106), Varun Aditya (1RV24IS143), Priyanka M Mundargi (1RV24IS096), and Tanisha R (1RV24IS137)}, who are bonafide students of RV College of Engineering, Bengaluru, in partial fulfilment for the award of degree of \textbf{Bachelor of Engineering in Information Science and Engineering} of the \textbf{Visvesvaraya Technological University}, Belagavi during the academic year \textbf{\academicyear}. It is certified that all corrections and suggestions indicated for the internal assessment have been incorporated in the report deposited in the departmental library. The report has been approved as it satisfies the academic requirements in respect of experiential learning work prescribed by the institution for the said degree.
+
+\vspace{1.4cm}
+\begin{tabularx}{\textwidth}{X X}
+\textbf{Signature of Guide} & \textbf{Signature of Head of the Department}\\[1.2cm]
+\textbf{Name of the Guide} & \textbf{Dr. G S Mamatha}\\
+\end{tabularx}
+
+\vspace{1.0cm}
+\begin{center}
+\textbf{External Viva}\\[0.25cm]
+\begin{tabular}{|p{0.45\textwidth}|p{0.35\textwidth}|}
+\hline
+\textbf{Name of Examiners} & \textbf{Signature with Date}\\
+\hline
+1. & \\[0.8cm]\hline
+2. & \\[0.8cm]\hline
+\end{tabular}
+\end{center}
+
+\chapter*{DECLARATION}
+\thispagestyle{plain}
+We, \textbf{Samanvitha L, Varun Aditya, Priyanka M Mundargi, and Tanisha R}, students of fourth semester B.E., Department of Information Science and Engineering, RV College of Engineering, Bengaluru, hereby declare that the Experiential Learning project titled \textbf{\textit{\projecttitle}} has been carried out by us and submitted in partial fulfilment for the award of degree of \textbf{Bachelor of Engineering in Information Science and Engineering} during the academic year \textbf{2025--26}.
+
+We also declare that any Intellectual Property Rights generated out of this project carried out at RVCE will be the property of RV College of Engineering, Bengaluru, and we will be one of the authors of the same.
+
+\vspace{1.0cm}
+\noindent Place: Bengaluru\\[0.35cm]
+Date:
+
+\vspace{0.6cm}
+\begin{tabular}{p{0.62\textwidth}p{0.28\textwidth}}
+\textbf{Name} & \textbf{Signature}\\[0.25cm]
+1. Samanvitha L (1RV24IS106) & \\[0.55cm]
+2. Varun Aditya (1RV24IS143) & \\[0.55cm]
+3. Priyanka M Mundargi (1RV24IS096) & \\[0.55cm]
+4. Tanisha R (1RV24IS137) & \\
+\end{tabular}
+
+\chapter*{Abstract}
+\thispagestyle{plain}
+Accredited Social Health Activists (ASHAs) act as a critical interface between rural communities and India's public health system, but they often work with limited clinical decision support, unreliable network connectivity, fragmented mobile tools, and increasing privacy obligations for digital health data. Existing systems largely digitize reporting workflows rather than providing offline, evidence-grounded triage assistance. AyushBot addresses this gap by proposing a privacy-preserving, multi-agent, offline-first clinical co-pilot for rural primary-care triage.
+
+The proposed system combines a low-cost Arduino-based vital-sign sensor pack, TinyML emergency detection, an Android application for ASHA interaction, a Raspberry Pi 4 primary health centre gateway, EdgeRAG-based clinical guideline retrieval, federated learning with differential privacy, and optional cloud aggregation. The methodology follows a layered engineering model: sensor acquisition, offline mobile capture, edge inference, referral planning, and privacy-preserving model improvement. The design uses IoT, computer networks, graph algorithms, retrieval-augmented generation, and federated learning as core implementation techniques.
+
+Expected evaluation focuses on EdgeRAG retrieval accuracy, time-to-first-token latency, TinyML emergency sensitivity, multi-agent diagnosis quality, referral accuracy, and federated learning convergence under non-IID district-level health distributions. The anticipated results show that HNSW with product quantization can preserve high clinical retrieval recall while reducing latency, and that multi-agent orchestration can reduce unsupported recommendations compared with a single unguided model. Repository charts for XGBoost and TinyML evaluation are included to support the performance discussion.
+
+The project concludes that offline-first, edge-native clinical decision support can be a practical and privacy-aware approach for rural health workflows. AyushBot is not positioned as a certified diagnostic device, but as a research-grade clinical decision-support prototype for safe triage assistance. Future work includes measured lab validation, Android workflow completion, sensor calibration, local-language voice interaction, usability testing, and ethical review before any real-world pilot.
+
+\tableofcontents
+\listoffigures
+\listoftables
+\clearpage
+\pagenumbering{arabic}
+
+\chapter{Introduction}
+
+\section{Project Context}
+AyushBot is an offline-first healthcare AI co-pilot for ASHA workers in India. It is designed for last-mile primary-care triage, where internet access can be unreliable and where frontline health workers need practical guidance for maternal, neonatal, child-health, nutrition, respiratory, and infectious-disease scenarios. The official National Health Mission description frames ASHA as a trained village-level woman health activist, accountable to her community, acting as an interface between the community and the public health system \cite{nhmasha}. This makes ASHA workflows an ideal target for decision support that is local, trustworthy, and easy to use.
+
+The project is positioned at the intersection of Internet of Things, edge AI, computer networks, algorithms, discrete mathematics, privacy engineering, and human-centred health technology. Instead of depending on a cloud chatbot, AyushBot places the critical intelligence near the point of care: a TinyML safety oracle runs on the microcontroller, clinical retrieval and multi-agent reasoning run on a Raspberry Pi gateway, and privacy-preserving learning happens through federated updates.
+
+\section{Need for the Project}
+Existing digital tools often focus on data entry and reporting. AyushBot focuses on actionable clinical assistance. The system is motivated by four practical needs:
+\begin{enumerate}
+  \item \textbf{Offline operation:} Rural field visits cannot assume reliable mobile data.
+  \item \textbf{Clinical grounding:} Recommendations must cite trusted guidelines instead of free-form model guesses.
+  \item \textbf{Privacy preservation:} Patient data should remain local wherever possible; only model updates should be shared.
+  \item \textbf{Low-cost deployability:} The prototype should be reproducible using commodity sensors, Android phones, and Raspberry Pi-class hardware.
+\end{enumerate}
+
+\section{External Context}
+AyushBot aligns with India's broader digital health direction. The Ayushman Bharat Digital Mission describes its goal as building the digital health ecosystem and supporting integrated health infrastructure \cite{abdm}. The WHO Global Traditional Medicine Centre, established with foundational support from India, emphasizes research evidence, health-systems strengthening, sustainability, equity, innovation, and technology for traditional medicine integration \cite{whogtmc}. For constrained hardware security, NIST selected the Ascon family for lightweight cryptography applications in 2023, making it relevant for microcontroller-to-phone encryption in AyushBot's sensor layer \cite{nistascon}.
+
+\chapter{Problem Definition}
+
+\section{Problem Statement}
+ASHA workers make frequent field-level triage and referral decisions, but their current tools are often paper-based, reporting-oriented, cloud-dependent, or difficult to use during a home visit. A practical decision-support system must operate offline, accept low-friction inputs, integrate vitals from inexpensive sensors, provide guideline-grounded recommendations, preserve patient privacy, and improve over time without centralising raw patient records.
+
+\section{Background Information}
+The AyushBot master document identifies the last-mile gap as a combination of connectivity failure, usability failure, privacy risk, and delayed knowledge updates. ASHAs may conduct many home visits per day and must screen for danger signs such as severe acute malnutrition, pneumonia, diarrhoeal disease, anaemia, neonatal warning signs, and high-risk pregnancy indicators. A cloud-only AI service fails when connectivity is absent; a non-grounded language model fails when it produces unsupported advice; and a centralised patient-data architecture raises privacy and data-governance concerns.
+
+\section{Prior-Art Gap}
+\begin{table}[!htbp]
+\centering
+\caption{Structured prior-art gap analysis}
+\begin{tabularx}{\textwidth}{p{0.25\textwidth}X X}
+\toprule
+\textbf{Prior System} & \textbf{Strength} & \textbf{Gap Addressed by AyushBot}\\
+\midrule
+mSakhi / ImTeCHO & ASHA digital workflow and reporting support & Limited on-device intelligence, no EdgeRAG, no FL, limited evidence citation.\\
+ASHABot-style chatbots & Conversational support for queries & Cloud/messaging dependency; no sensor integration, no triage pipeline, no PHC gateway.\\
+Rule-based clinical CDS & Transparent rules & Less adaptive; does not learn local disease patterns; limited multilingual interaction.\\
+TinyML vital monitors & Fast on-device anomaly detection & Usually standalone; AyushBot uses TinyML as an independent safety oracle in a wider system.\\
+Healthcare FL studies & Privacy-preserving distributed learning & Often use synthetic non-IID splits; AyushBot proposes NFHS-5-grounded district heterogeneity.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\chapter{Objectives}
+
+\section{Primary Objectives}
+\begin{enumerate}
+  \item Develop an offline-first clinical co-pilot architecture for ASHA workers.
+  \item Integrate sensor-based vital-sign capture using low-cost IoT hardware.
+  \item Implement a TinyML emergency detector as a hardware-level safety oracle.
+  \item Design an EdgeRAG pipeline on Raspberry Pi-class hardware for guideline-grounded recommendations.
+  \item Build a five-agent orchestration model for pre-triage, diagnosis, referral, federated learning, and language support.
+  \item Use federated learning and differential privacy so local models improve without transmitting raw patient data.
+\end{enumerate}
+
+\section{Secondary Objectives}
+\begin{enumerate}
+  \item Map the prototype to IoT, computer networks, DAA, and discrete mathematics course outcomes.
+  \item Generate evaluation plots for retrieval latency, diagnosis performance, FL convergence, and TinyML response.
+  \item Prepare the system for future Android, gateway, and cloud implementation milestones.
+  \item Align the project with responsible digital health and evidence-based traditional-medicine integration.
+\end{enumerate}
+
+\chapter{Methodology}
+
+\section{Approach}
+The project follows a layered engineering approach: identify ASHA workflow pain points, define safety and privacy constraints, design the five-layer architecture, prototype hardware and software modules, validate each module with measurable metrics, and integrate the modules into a lab demonstrator.
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}[
+  node distance=0.9cm,
+  block/.style={rectangle, rounded corners=3pt, draw=black, fill=lightgraybox, text width=0.78\textwidth, align=center, minimum height=0.8cm},
+  arrow/.style={-{Latex[length=3mm]}, thick, draw=black}
+]
+\node[block] (a) {Identify ASHA workflow, offline constraints, and clinical safety requirements};
+\node[block, below=of a] (b) {Design five-layer system: Patient, Sensor Pack, Android Phone, PHC Gateway, Cloud FL};
+\node[block, below=of b] (c) {Build modules: TinyML vitals alarm, EdgeRAG, multi-agent orchestration, referral routing, FL simulation};
+\node[block, below=of c] (d) {Evaluate using expected metrics: Recall@5, TTFT, diagnosis F1, referral accuracy, FL convergence, privacy budget};
+\node[block, below=of d] (e) {Prepare professional report, graphs, flowcharts, and future implementation roadmap};
+\draw[arrow] (a) -- (b);
+\draw[arrow] (b) -- (c);
+\draw[arrow] (c) -- (d);
+\draw[arrow] (d) -- (e);
+\end{tikzpicture}
+\caption{Overall methodology followed for the AyushBot experiential learning project}
+\label{fig:methodology}
+\end{figure}
+
+\section{Procedures}
+\begin{enumerate}
+  \item Extract project scope, architecture, metrics, and expected results from the AyushBot master document.
+  \item Compare the design with official and contemporary external references.
+  \item Convert the prescribed EL report structure into a formal LaTeX report.
+  \item Add system diagrams, charts, and available repository visuals.
+  \item Validate that the report source keeps all report text black.
+\end{enumerate}
+
+\chapter{Project Execution}
+
+\section{Planning and Design}
+The design decomposes the system into five autonomous layers so that failure of cloud or backhaul connectivity does not interrupt field operation. The main architectural principle is: \textit{raw patient data should remain at the ASHA phone or PHC gateway; only privacy-protected updates should move upward.}
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}[
+  layer/.style={rectangle, rounded corners=3pt, draw=black, fill=lightgraybox, minimum height=1cm, text width=0.82\textwidth, align=center},
+  arrow/.style={-{Latex[length=3mm]}, thick, draw=black}
+]
+\node[layer] (p) {\textbf{Layer 1: Patient / Household}\\Symptoms, vitals, ASHA observation};
+\node[layer, below=0.35cm of p] (s) {\textbf{Layer 2: IoT Sensor Pack}\\MAX30100/MAX30102, DS18B20, HX711, Arduino TinyML, ASCON-128 BLE};
+\node[layer, below=0.35cm of s] (a) {\textbf{Layer 3: ASHA Android Phone}\\Offline app, BLE receiver, encrypted SQLite, local-language UI, MQTT sync};
+\node[layer, below=0.35cm of a] (g) {\textbf{Layer 4: PHC Edge Gateway}\\Raspberry Pi 4, EdgeRAG, five-agent orchestrator, Mosquitto, local FL};
+\node[layer, below=0.35cm of g] (c) {\textbf{Layer 5: NHM / Research Cloud}\\Global FL aggregation, model registry, analytics, knowledge-base updates};
+\draw[arrow] (p) -- node[right]{vitals} (s);
+\draw[arrow] (s) -- node[right]{encrypted BLE} (a);
+\draw[arrow] (a) -- node[right]{local Wi-Fi / MQTT TLS} (g);
+\draw[arrow] (g) -- node[right]{DP gradients only} (c);
+\end{tikzpicture}
+\caption{AyushBot five-layer architecture}
+\label{fig:architecture}
+\end{figure}
+
+\section{Implementation}
+The implementation is planned as a semester-scale MVP rather than full deployment. The MVP must demonstrate: EdgeRAG on RPi-class hardware, end-to-end multi-agent triage on scripted cases, Arduino TinyML emergency detection, federated learning simulation, and Android BLE/MQTT connectivity.
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}[
+  agent/.style={rectangle, rounded corners=3pt, draw=black, fill=lightgraybox, text width=2.28cm, align=center, minimum height=1cm, font=\small},
+  arrow/.style={-{Latex[length=3mm]}, thick, draw=black}
+]
+\node[agent] (l) {Language Agent\\ASR, NER, translation};
+\node[agent, right=0.38cm of l] (t) {Pre-Triage Agent\\XGBoost risk level};
+\node[agent, right=0.38cm of t] (d) {Diagnosis Agent\\EdgeRAG + LLM};
+\node[agent, right=0.38cm of d] (r) {Referral Agent\\Dijkstra + dosage};
+\node[agent, below=0.9cm of d] (f) {FL Sync Agent\\FedProx + DP + DTN};
+\draw[arrow] (l) -- (t);
+\draw[arrow] (t) -- (d);
+\draw[arrow] (d) -- (r);
+\draw[arrow] (t) |- (f);
+\draw[arrow] (d) -- (f);
+\end{tikzpicture}
+\caption{Five-agent orchestration model}
+\label{fig:agents}
+\end{figure}
+
+\section{Implementation Timeline}
+\begin{table}[!htbp]
+\centering
+\caption{Condensed 20-week implementation timeline}
+\begin{tabularx}{\textwidth}{p{0.18\textwidth}X}
+\toprule
+\textbf{Weeks} & \textbf{Milestone}\\
+\midrule
+1--2 & Procure sensors, assemble Arduino sensor pack, configure Raspberry Pi OS and networking.\\
+3--4 & Train and deploy TinyML emergency model; implement Kalman filter and BLE packet encryption.\\
+5--6 & Build clinical PDF corpus, chunk documents, generate embeddings, construct HNSW+PQ index.\\
+7--8 & Train pre-triage classifier and implement referral graph with Dijkstra routing.\\
+9--10 & Integrate LangGraph-style agent orchestration and MQTT gateway communication.\\
+11--12 & Simulate FL clients with FedAvg, FedProx, gradient clipping, Gaussian DP, and DTN scheduling.\\
+13--15 & Add Adaptive Evidence-Weighted Retrieval, language entity extraction, and fuzzy term matching.\\
+16--17 & Run evaluation baselines and generate graphs for report and presentation.\\
+18--19 & Prepare paper/report, diagrams, demo video, and review material.\\
+20 & Final demo, internal review, and submission preparation.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\chapter{Tools and Techniques Used}
+
+\section{Tools}
+\begin{longtable}{p{0.24\textwidth}p{0.68\textwidth}}
+\caption{Tools and their purpose}\\
+\toprule
+\textbf{Tool / Platform} & \textbf{Purpose}\\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Tool / Platform} & \textbf{Purpose}\\
+\midrule
+\endhead
+Arduino Nano 33 BLE Sense & Microcontroller platform for sensor acquisition, BLE transmission, and TinyML emergency detection.\\
+MAX30100/MAX30102 & Pulse oximetry and heart-rate sensing.\\
+DS18B20 & Digital body temperature sensing.\\
+HX711 + Load Cell & Weight measurement for child nutrition and WAZ-related screening.\\
+Android / Kotlin & ASHA-facing mobile interface, BLE client, encrypted local case storage, and MQTT sync.\\
+Raspberry Pi 4 & PHC edge gateway for local AI inference, EdgeRAG, MQTT broker, and federated training.\\
+FAISS / HNSW & Approximate nearest-neighbour search over clinical guideline embeddings.\\
+MiniLM / Cross-encoder & Dense retrieval and reranking of clinical protocol chunks.\\
+Phi-3 Mini / GGUF runtime & Local guideline-grounded response synthesis under resource constraints.\\
+Flower FL & Federated learning simulation and aggregation.\\
+Mosquitto MQTT & Local asynchronous sync between phone and gateway.\\
+LaTeX, TikZ, PGFPlots & Professional report preparation, diagrams, and generated graphs.\\
+\bottomrule
+\end{longtable}
+
+\section{Techniques}
+\begin{enumerate}
+  \item \textbf{EdgeRAG:} HNSW retrieval, product quantization, cross-encoder reranking, and constrained LLM synthesis.
+  \item \textbf{TinyML:} INT8 decision tree model for emergency vital-sign classification.
+  \item \textbf{Federated Learning:} FedAvg/FedProx comparison, gradient clipping, Gaussian differential privacy, and store-carry-forward scheduling.
+  \item \textbf{Graph Algorithms:} Dijkstra shortest path for referral routing across facilities.
+  \item \textbf{Discrete Logic:} Emergency, severe, and moderate risk levels expressed as propositional triage rules.
+  \item \textbf{Network Security:} ASCON-128 for constrained BLE payloads and TLS/mTLS for MQTT and cloud sync.
+\end{enumerate}
+
+\chapter{Results and Discussion}
+
+\section{Final Results}
+The present report is based on the master document's anticipated MVP results and evaluation protocol. The expected results are used for report-quality graphs and should be replaced by measured values after lab execution. Repository charts from \texttt{ml/charts} are included where they support the report narrative.
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  ybar,
+  width=0.88\textwidth,
+  height=5.4cm,
+  ymin=0,ymax=1.1,
+  ylabel={Recall@5},
+  symbolic x coords={Cloud RAG,HNSW+PQ,HNSW,IVF Flat,Flat Scan},
+  xtick=data,
+  x tick label style={rotate=20,anchor=east},
+  nodes near coords,
+  bar width=16pt,
+  fill=lightgraybox,
+  draw=black
+]
+\addplot coordinates {(Cloud RAG,0.98) (HNSW+PQ,0.955) (HNSW,0.97) (IVF Flat,0.91) (Flat Scan,1.00)};
+\end{axis}
+\end{tikzpicture}
+\caption{Expected clinical retrieval Recall@5 across RAG configurations}
+\label{fig:recall}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=0.88\textwidth,
+  height=5.4cm,
+  xlabel={System configuration},
+  ylabel={Time-to-first-token (seconds)},
+  symbolic x coords={HNSW+PQ,HNSW,IVF Flat,Flat Scan},
+  xtick=data,
+  ymin=0,ymax=36,
+  ymajorgrids=true,
+  mark=*,
+  line width=1.2pt,
+  nodes near coords
+]
+\addplot[color=black] coordinates {(HNSW+PQ,2.4) (HNSW,3.2) (IVF Flat,5.1) (Flat Scan,33)};
+\end{axis}
+\end{tikzpicture}
+\caption{Expected EdgeRAG latency comparison on Raspberry Pi 4}
+\label{fig:ttft}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=0.9\textwidth,
+  height=5.5cm,
+  xlabel={Federated learning round},
+  ylabel={Test accuracy},
+  xmin=0,xmax=20,
+  ymin=0.70,ymax=0.91,
+  legend pos=south east,
+  ymajorgrids=true,
+  xmajorgrids=true
+]
+\addplot[color=black, dashed, line width=1.1pt] coordinates {(0,0.893) (20,0.893)};
+\addlegendentry{Centralized}
+\addplot[color=black, mark=square*, line width=1.1pt] coordinates {(0,0.74) (4,0.78) (8,0.815) (12,0.84) (16,0.85) (20,0.854)};
+\addlegendentry{FedAvg}
+\addplot[color=black, mark=*, line width=1.1pt] coordinates {(0,0.74) (4,0.80) (8,0.842) (12,0.862) (16,0.869) (20,0.872)};
+\addlegendentry{FedProx}
+\addplot[color=black, mark=triangle*, line width=1.1pt] coordinates {(0,0.74) (4,0.805) (8,0.848) (12,0.866) (16,0.878) (20,0.881)};
+\addlegendentry{FedProx + AEWR}
+\end{axis}
+\end{tikzpicture}
+\caption{Expected federated learning convergence under NFHS-5-grounded non-IID distributions}
+\label{fig:fl}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.88\textwidth]{xgboost_evaluation.png}
+\caption{XGBoost evaluation chart from the project ML chart artifacts}
+\label{fig:xgboost-eval}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.88\textwidth]{tinyml_evaluation.png}
+\caption{TinyML evaluation chart from the project ML chart artifacts}
+\label{fig:tinyml-eval}
+\end{figure}
+
+\begin{table}[!htbp]
+\centering
+\caption{Expected multi-agent performance compared with baselines}
+\begin{tabular}{lccc}
+\toprule
+\textbf{System} & \textbf{Diagnosis F1} & \textbf{Hallucination Rate} & \textbf{Referral Accuracy}\\
+\midrule
+Rule-based IMCI & 0.61 & 42\% & N/A\\
+Single LLM, no RAG & 0.71 & 22\% & 0.63\\
+Single LLM + RAG & 0.78 & 7\% & 0.77\\
+AyushBot five-agent + AEWR & 0.82--0.85 & $<$3\% & 0.88\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Discussion}
+The expected results indicate that AyushBot's key design choices are internally consistent. HNSW+PQ sacrifices only a small amount of retrieval recall while achieving a major latency reduction compared with brute-force retrieval. The multi-agent design improves safety by separating risk classification, evidence retrieval, referral routing, language processing, and learning. Federated learning improves over local-only models while preserving data locality, and FedProx is expected to improve worst-client accuracy under non-IID district distributions.
+
+The most important practical strength is fault isolation. If the cloud is unavailable, the PHC gateway still works. If the gateway is unavailable, the Android phone can cache cases. If the phone fails during a critical reading, the Arduino TinyML safety oracle can still raise an emergency alarm.
+
+\chapter{Prototype}
+
+\section{Prototype Description}
+The proposed MVP consists of:
+\begin{enumerate}
+  \item Arduino sensor pack with SpO2/HR, temperature, and weight sensors.
+  \item Android application for ASHA intake, BLE receiving, local storage, and MQTT sync.
+  \item Raspberry Pi gateway running EdgeRAG, five-agent orchestration, MQTT broker, and local FL.
+  \item FL simulation environment for FedAvg, FedProx, and DP experiments.
+  \item Demo scenarios covering pneumonia, severe malnutrition, diarrhoeal dehydration, fever, and high-risk pregnancy flags.
+\end{enumerate}
+
+
+\section{Development Process}
+Development should proceed module-wise: hardware first, then Android connectivity, then gateway AI, then FL, and finally integrated testing. The project should use scripted patient scenarios before any human-facing test, because the system is a clinical decision-support prototype and must not be treated as a certified diagnostic device.
+
+\section{Testing and Validation}
+\begin{table}[!htbp]
+\centering
+\caption{Validation plan for the prototype}
+\begin{tabularx}{\textwidth}{p{0.22\textwidth}X p{0.24\textwidth}}
+\toprule
+\textbf{Module} & \textbf{Test} & \textbf{Target}\\
+\midrule
+TinyML Sensor Pack & Emergency classification latency and sensitivity & $<$0.4 ms, sensitivity $\geq$0.95\\
+EdgeRAG & Recall@5 and TTFT on clinical queries & Recall@5 $\geq$0.95, TTFT $<$3 s\\
+Multi-Agent Pipeline & Scripted cases compared with expected triage/referral & Diagnosis F1 0.82--0.85\\
+Federated Learning & 20-round non-IID simulation & Within 2--3\% of centralized accuracy\\
+Security & Verify encrypted BLE/MQTT paths and no raw cloud upload & No plaintext health payloads\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\chapter{Conclusion}
+
+\section{Summary}
+AyushBot presents a professional, research-grounded design for offline-first rural primary-care triage support. It combines IoT sensing, TinyML, EdgeRAG, multi-agent reasoning, graph-based referral planning, federated learning, and differential privacy into a coherent system. The report demonstrates that the project can satisfy experiential learning requirements while also forming the basis of a research prototype suitable for publication and further implementation.
+
+\section{Personal Reflection}
+This project connects classroom algorithms and systems topics to a socially meaningful application. Dijkstra routing, HNSW search, differential privacy, federated optimization, Kalman filtering, and propositional clinical logic become visible in a single healthcare workflow. The main learning is that a strong digital health system is not only an AI model; it is a safety-critical combination of hardware, networks, user experience, evidence, privacy, and governance.
+
+\section{Future Work}
+Future work should replace anticipated metrics with measured lab results, implement Android screens for ASHA workflows, validate sensor readings against reference devices, build a larger guideline corpus, add local-language voice interaction, conduct usability testing with health-worker proxies, and prepare a regulatory and ethics review plan before any field pilot.
+
+\chapter*{Visuals}
+\addcontentsline{toc}{chapter}{Visuals}
+The report includes the following visuals:
+\begin{itemize}
+  \item Figure~\ref{fig:methodology}: methodology flowchart.
+  \item Figure~\ref{fig:architecture}: five-layer system architecture.
+  \item Figure~\ref{fig:agents}: five-agent orchestration flow.
+  \item Figure~\ref{fig:recall}: expected EdgeRAG Recall@5 comparison.
+  \item Figure~\ref{fig:ttft}: expected latency comparison.
+  \item Figure~\ref{fig:fl}: expected FL convergence graph.
+  \item Figure~\ref{fig:xgboost-eval}: XGBoost evaluation chart from \texttt{ml/charts}.
+  \item Figure~\ref{fig:tinyml-eval}: TinyML evaluation chart from \texttt{ml/charts}.
+\end{itemize}
+
+\renewcommand{\bibname}{References}
+\begin{thebibliography}{99}
+
+\bibitem{nhmasha}
+National Health Mission, Government of India, ``About Accredited Social Health Activist (ASHA),'' updated June 18, 2026. [Online]. Available: \url{https://www.nhm.gov.in/index1.php?lang=1&level=1&sublinkid=150&lid=226}
+
+\bibitem{abdm}
+National Health Authority, Government of India, ``Ayushman Bharat Digital Mission: Building Digital Health Ecosystem.'' [Online]. Available: \url{https://abdm.gov.in/}
+
+\bibitem{whogtmc}
+World Health Organization, ``WHO Global Traditional Medicine Centre,'' 2026. [Online]. Available: \url{https://www.who.int/teams/who-global-traditional-medicine-centre/overview}
+
+\bibitem{nistascon}
+National Institute of Standards and Technology, ``Lightweight Cryptography Standardization Process: NIST Selects Ascon,'' Feb. 7, 2023. [Online]. Available: \url{https://csrc.nist.gov/News/2023/lightweight-cryptography-nist-selects-ascon}
+
+\bibitem{masterdoc}
+AyushBot Project Team, ``AyushBot Master Research and Product Document, Version 2.0,'' R.V. College of Engineering, Bengaluru, May 2026.
+
+\bibitem{nfhs5}
+International Institute for Population Sciences and ICF, \textit{National Family Health Survey (NFHS-5), 2019--21: India}. Mumbai: IIPS, 2021.
+
+\bibitem{whoimci}
+World Health Organization, \textit{Integrated Management of Childhood Illness: Chart Booklet}. Geneva: WHO.
+
+\bibitem{mohfwstw}
+Ministry of Health and Family Welfare, Government of India, \textit{Standard Treatment Workflows}. New Delhi: MoHFW.
+
+\end{thebibliography}
+
+\end{document}
