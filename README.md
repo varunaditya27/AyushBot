@@ -2,7 +2,7 @@
 
 <div align="center">
 
-# 🏥 AyushBot: Clinical Triage & Navigation System
+# 🏥 AyushBot- A Privacy-Preserving Federated Multi-Agent EdgeRAG Co-Pilot for Offline-First Rural Primary-Care Triage in India
 
 **Empowering ASHA Workers with Offline-First, AI-Driven Clinical Support**
 
