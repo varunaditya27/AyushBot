@@ -17,6 +17,9 @@ interface LlmChatEngine : Closeable {
     fun isInitialized(): Boolean
 
     fun streamReply(prompt: String): Flow<String>
+
+    /** Clears the current conversation session so the next call starts fresh. */
+    fun resetConversation()
 }
 
 sealed class LlmStatus {

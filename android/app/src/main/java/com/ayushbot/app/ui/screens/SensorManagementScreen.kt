@@ -30,8 +30,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -52,11 +52,18 @@ import com.ayushbot.app.ui.theme.StateGreen
 fun SensorManagementScreen(
     onBack: () -> Unit,
 ) {
-    val spacing = AyushBotDesignSystem.spacing
-    var selfTestPassed by remember { mutableStateOf<Boolean?>(null) }
+    val container = com.ayushbot.app.core.di.LocalAppContainer.current
+    val sensorRepository = container.sensorRepository
+    val sensorData by sensorRepository.sensorData.collectAsState()
 
-    val signalQuality = 0.84f
-    val isConnected = true
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        sensorRepository.startCapture()
+    }
+
+    val spacing = AyushBotDesignSystem.spacing
+    val selfTestPassed = sensorData.isSelfTestPassed
+    val signalQuality = sensorData.signalQuality
+    val isConnected = sensorData.isConnected
 
     Scaffold(
         topBar = {
@@ -68,7 +75,7 @@ fun SensorManagementScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { }) {
+                    IconButton(onClick = { sensorRepository.startCapture() }) {
                         Icon(Icons.Rounded.Refresh, "Refresh")
                     }
                 },
@@ -109,7 +116,7 @@ fun SensorManagementScreen(
                                 fontWeight = FontWeight.SemiBold,
                             )
                             Text(
-                                text = "AyushBot-SP-04A2",
+                                text = sensorData.deviceName,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
@@ -137,27 +144,27 @@ fun SensorManagementScreen(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                 ) {
                     VitalGauge(
-                        value = 97f,
+                        value = sensorData.spo2,
                         maxValue = 100f,
                         unit = "%",
                         label = "SpO₂",
-                        ringColor = spo2RingColor(97f),
+                        ringColor = spo2RingColor(sensorData.spo2),
                         signalQuality = signalQuality,
                     )
                     VitalGauge(
-                        value = 118f,
+                        value = sensorData.hr,
                         maxValue = 200f,
                         unit = "BPM",
                         label = "HR",
-                        ringColor = hrRingColor(118f),
+                        ringColor = hrRingColor(sensorData.hr),
                         signalQuality = signalQuality,
                     )
                     VitalGauge(
-                        value = 37.3f,
+                        value = sensorData.tempC,
                         maxValue = 42f,
                         unit = "°C",
                         label = "Temp",
-                        ringColor = tempRingColor(37.3f),
+                        ringColor = tempRingColor(sensorData.tempC),
                         signalQuality = signalQuality,
                         size = 100.dp,
                     )
@@ -181,7 +188,7 @@ fun SensorManagementScreen(
                             horizontalArrangement = Arrangement.spacedBy(spacing.sm),
                         ) {
                             Icon(Icons.Rounded.BatteryStd, contentDescription = null)
-                            Text("Battery: 78%", style = MaterialTheme.typography.bodyLarge)
+                            Text("Battery: ${sensorData.battery}%", style = MaterialTheme.typography.bodyLarge)
                         }
 
                         Row(
@@ -201,7 +208,7 @@ fun SensorManagementScreen(
 
             item {
                 Button(
-                    onClick = { selfTestPassed = true },
+                    onClick = { sensorRepository.runSelfTest() },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),
@@ -228,7 +235,7 @@ fun SensorManagementScreen(
                     false -> ErrorStateCard(
                         title = "Self-test failed",
                         subtitle = "Check sensor cables and retry pairing before capture.",
-                        onRetry = { selfTestPassed = null },
+                        onRetry = { sensorRepository.runSelfTest() },
                     )
 
                     null -> OutlinedButton(

@@ -69,6 +69,11 @@ class LiteRtLmChatEngine(
         }
     }
 
+    override fun resetConversation() {
+        conversation?.close()
+        conversation = null
+    }
+
     override fun close() {
         conversation?.close()
         conversation = null

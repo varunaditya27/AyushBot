@@ -77,6 +77,18 @@ fun NewVisitScreen(
     var selectedSymptoms by remember { mutableStateOf(setOf<String>()) }
     var sensorQualityOk by remember { mutableStateOf(false) }
 
+    val container = com.ayushbot.app.core.di.LocalAppContainer.current
+    val sensorRepository = container.sensorRepository
+    val sensorData by sensorRepository.sensorData.collectAsState()
+
+    LaunchedEffect(currentStep) {
+        if (currentStep == 1) {
+            sensorRepository.startCapture()
+        } else {
+            sensorRepository.stopCapture()
+        }
+    }
+
     val canProceed = when (currentStep) {
         0 -> patientName.isNotBlank() && patientAge.toIntOrNull() != null
         1 -> sensorQualityOk
@@ -184,6 +196,7 @@ fun NewVisitScreen(
                     )
                     1 -> SensorCaptureStep(
                         isOffline = false,
+                        sensorData = sensorData,
                         onSignalQualityChanged = { sensorQualityOk = it },
                     )
                     2 -> SymptomChecklistStep(
@@ -342,18 +355,19 @@ private fun PatientIdentityStep(
 @Composable
 private fun SensorCaptureStep(
     isOffline: Boolean,
+    sensorData: com.ayushbot.app.data.repository.SensorData,
     onSignalQualityChanged: (Boolean) -> Unit,
 ) {
-    val spo2Value = 96f
-    val hrValue = 128f
-    val tempValue = 38.2f
-    val weightKg = "8.2"
+    val spo2Value = sensorData.spo2
+    val hrValue = sensorData.hr
+    val tempValue = sensorData.tempC
+    val weightKg = String.format("%.2f", sensorData.weightKg)
 
-    val signalQualitySpo2 = 0.92f
-    val signalQualityHr = 0.85f
-    val signalQualityTemp = 1f
+    val signalQualitySpo2 = sensorData.signalQuality
+    val signalQualityHr = sensorData.signalQuality
+    val signalQualityTemp = if (tempValue > 0) 1.0f else 0.0f
     val minimumQuality = minOf(signalQualitySpo2, signalQualityHr, signalQualityTemp)
-    val qualityGatePassed = minimumQuality >= 0.8f
+    val qualityGatePassed = sensorData.isConnected && minimumQuality >= 0.7f
     val criticalDetected = spo2Value < 90f || tempValue >= 39.5f
 
     LaunchedEffect(qualityGatePassed) {
@@ -395,7 +409,7 @@ private fun SensorCaptureStep(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "Sensor Pack Connected — Reading vitals...",
+                    if (sensorData.isConnected) "Sensor Pack Connected — ${sensorData.deviceName}" else "Sensor Pack Disconnected — Scanning...",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )

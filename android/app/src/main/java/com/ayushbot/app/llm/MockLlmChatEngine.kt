@@ -21,5 +21,7 @@ class MockLlmChatEngine(private val config: LlmConfig) : LlmChatEngine {
         )
     }
 
+    override fun resetConversation() = Unit
+
     override fun close() = Unit
 }

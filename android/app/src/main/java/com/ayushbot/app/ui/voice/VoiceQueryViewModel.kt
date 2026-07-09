@@ -122,6 +122,8 @@ class VoiceQueryViewModel(
         val nextLang = appConfig.voice.languages.firstOrNull { it.id == languageId } ?: return
         val prefs = context.getSharedPreferences("ayushbot_prefs", android.content.Context.MODE_PRIVATE)
         prefs.edit().putString("selected_language", nextLang.id).apply()
+        // Reset the LLM conversation so no stale context from the previous language bleeds in
+        chatEngine.resetConversation()
         _uiState.update {
             it.copy(
                 voiceLanguageId = nextLang.id,
@@ -260,15 +262,18 @@ class VoiceQueryViewModel(
             val languageId = _uiState.value.voiceLanguageId
             val languageTag = _uiState.value.voiceLanguageTag
 
-            val languageDirective = when (languageId) {
-                "hi" -> " (Respond only in Hindi language using Devanagari script)"
-                "kn" -> " (Respond only in Kannada language using Kannada script)"
-                "te" -> " (Respond only in Telugu language using Telugu script)"
-                "ta" -> " (Respond only in Tamil language using Tamil script)"
-                "bn" -> " (Respond only in Bengali language using Bengali script)"
+            // Language directive: prepend as a leading instruction so Gemma reliably
+            // follows it. A trailing parenthetical is too easy to ignore, especially
+            // when conversation history already has context in another language.
+            val languagePrefix = when (languageId) {
+                "hi" -> "[INSTRUCTION: Respond ONLY in Hindi using Devanagari script. Do not use English or any other language.] "
+                "kn" -> "[INSTRUCTION: Respond ONLY in Kannada using Kannada script (ಕನ್ನಡ). Do not use English, Tamil, or any other language.] "
+                "te" -> "[INSTRUCTION: Respond ONLY in Telugu using Telugu script (తెలుగు). Do not use English or any other language.] "
+                "ta" -> "[INSTRUCTION: Respond ONLY in Tamil using Tamil script (தமிழ்). Do not use English or any other language.] "
+                "bn" -> "[INSTRUCTION: Respond ONLY in Bengali using Bengali script (বাংলা). Do not use English or any other language.] "
                 else -> ""
             }
-            val finalPrompt = prompt + languageDirective
+            val finalPrompt = languagePrefix + prompt
 
             try {
                 _uiState.update { it.copy(llmStatus = LlmStatus.Loading) }

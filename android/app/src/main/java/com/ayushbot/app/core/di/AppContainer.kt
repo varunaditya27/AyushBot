@@ -7,6 +7,9 @@ import com.ayushbot.app.data.local.AyushBotDatabase
 import com.ayushbot.app.data.repository.BackendCaseRepository
 import com.ayushbot.app.data.repository.CaseRepository
 import com.ayushbot.app.data.repository.MockCaseRepository
+import com.ayushbot.app.data.repository.SensorRepository
+import com.ayushbot.app.data.repository.MockSensorRepository
+import com.ayushbot.app.data.repository.BleSensorRepository
 import com.ayushbot.app.data.remote.BackendApiFactory
 import com.ayushbot.app.llm.LiteRtLmChatEngine
 import com.ayushbot.app.llm.LlmChatEngine
@@ -44,6 +47,12 @@ class AppContainer(context: Context) {
         BackendCaseRepository(
             api = BackendApiFactory.create(appConfig.backend.baseUrl),
         )
+    }
+
+    val sensorRepository: SensorRepository = if (appConfig.mock.useMockSensors) {
+        MockSensorRepository()
+    } else {
+        BleSensorRepository(context)
     }
 
     private val voiceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
