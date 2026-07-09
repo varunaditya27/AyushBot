@@ -1,8 +1,22 @@
+import html
 import pandas as pd
 import streamlit as st
 import re
 
 from components.metrics import custom_metric
+
+
+def _patient_card(patient: dict | None, fallback_title: str, fallback_detail: str) -> str:
+	if not patient:
+		return f"<b>{html.escape(fallback_title)}:</b> {html.escape(fallback_detail)}<br>No additional details found on gateway."
+	return (
+		f"<b>ID:</b> {html.escape(str(patient.get('patient_id', 'Unknown')))}<br>"
+		f"<b>Name:</b> {html.escape(str(patient.get('name', 'Unknown')))}<br>"
+		f"<b>Age/Sex:</b> {html.escape(str(patient.get('age', '')))}{html.escape(str(patient.get('sex', '')))}<br>"
+		f"<b>Village:</b> {html.escape(str(patient.get('village', 'Unknown')))}<br>"
+		f"<b>Household:</b> {html.escape(str(patient.get('household', 'Unknown')))}<br>"
+		f"<b>Phone:</b> {html.escape(str(patient.get('phone', 'Unknown')))}"
+	)
 
 
 def render(state: dict) -> None:
@@ -22,7 +36,7 @@ def render(state: dict) -> None:
 		custom_metric("Offline backlog", sum(1 for case in state["cases"] if case["sync_status"] != "Synced"), "#56605c")
 
 	st.subheader("Sync event log")
-	st.dataframe(pd.DataFrame(events), use_container_width=True, hide_index=True)
+	st.dataframe(pd.DataFrame(events), width="stretch", hide_index=True)
 
 	st.subheader("Duplicate patient conflict")
 	conflicts = [e for e in events if "Duplicate conflict" in e["type"] and e["status"] == "Needs resolution"]
@@ -36,14 +50,13 @@ def render(state: dict) -> None:
 			format_func=lambda c: f"{c['detail']} ({c['village']})"
 		)
 		
-		# Dynamically parse conflict details from detail text (e.g., "Sunita Oraon may match P-0884")
 		detail_str = selected_conflict["detail"]
 		match = re.match(r"(.*?) may match (P-\d+)", detail_str)
 		
-		new_info = "New incoming patient details"
-		exist_info = "Existing patient profile details"
-		new_name = "Sunita Oraon"
-		existing_id = "P-0884"
+		new_name = ""
+		existing_id = ""
+		new_pat = None
+		exist_pat = None
 		
 		if match:
 			new_name = match.group(1).strip()
@@ -51,25 +64,20 @@ def render(state: dict) -> None:
 			
 			new_pat = next((p for p in state["patients"] if p["name"] == new_name), None)
 			exist_pat = next((p for p in state["patients"] if p["patient_id"] == existing_id), None)
-			
-			if new_pat:
-				new_info = f"<b>Name:</b> {new_pat['name']}<br><b>Age/Sex:</b> {new_pat['age']}{new_pat['sex']}<br><b>Village:</b> {new_pat['village']}<br><b>Household:</b> {new_pat['household']}<br><b>Phone:</b> {new_pat['phone']}<br><b>Reported:</b> {new_pat['timestamp']}"
-			else:
-				new_info = f"<b>Name:</b> {new_name}<br>No additional details found on gateway."
-				
-			if exist_pat:
-				exist_info = f"<b>ID:</b> {exist_pat['patient_id']}<br><b>Name:</b> {exist_pat['name']}<br><b>Age/Sex:</b> {exist_pat['age']}{exist_pat['sex']}<br><b>Village:</b> {exist_pat['village']}<br><b>Household:</b> {exist_pat['household']}<br><b>Phone:</b> {exist_pat['phone']}"
-			else:
-				exist_info = f"<b>ID:</b> {existing_id}<br>No existing record details found on gateway."
+			new_info = _patient_card(new_pat, "Incoming name", new_name)
+			exist_info = _patient_card(exist_pat, "Existing ID", existing_id)
+		else:
+			new_info = _patient_card(None, "Conflict detail", detail_str)
+			exist_info = _patient_card(None, "Existing profile", "Unable to parse from conflict detail")
 
 		with st.form("duplicate-resolution-form"):
-			st.markdown(f"**Resolving:** {selected_conflict['detail']}")
+			st.markdown(f"**Resolving:** {html.escape(selected_conflict['detail'])}")
 			
 			col_left, col_right = st.columns(2)
 			with col_left:
 				st.markdown(
 					f"""
-					<div style="background-color: #f8fafc; padding: 1.2rem; border-radius: 8px; border: 1px solid #e2e8f0; height: 160px;">
+					<div style="background-color: #f8fafc; padding: 1.2rem; border-radius: 8px; border: 1px solid #e2e8f0; min-height: 160px;">
 						<strong style="color: #16754f; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em;">New Incoming Record</strong>
 						<p style="margin: 0.6rem 0 0 0; font-size: 0.9rem; line-height: 1.4; color: #334155;">{new_info}</p>
 					</div>
@@ -79,7 +87,7 @@ def render(state: dict) -> None:
 			with col_right:
 				st.markdown(
 					f"""
-					<div style="background-color: #f8fafc; padding: 1.2rem; border-radius: 8px; border: 1px solid #e2e8f0; height: 160px;">
+					<div style="background-color: #f8fafc; padding: 1.2rem; border-radius: 8px; border: 1px solid #e2e8f0; min-height: 160px;">
 						<strong style="color: #475569; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em;">Existing Patient Profile</strong>
 						<p style="margin: 0.6rem 0 0 0; font-size: 0.9rem; line-height: 1.4; color: #334155;">{exist_info}</p>
 					</div>
@@ -102,20 +110,18 @@ def render(state: dict) -> None:
 				selected_conflict["detail"] += f" - Resolved: {choice}"
 				
 				if choice == "Merge records":
-					# Update matching patient data in state
 					for patient in state["patients"]:
 						if patient["name"] == new_name:
-							patient["name"] = exist_pat["name"] if exist_pat else "Sunita Uran"
+							patient["name"] = exist_pat["name"] if exist_pat else patient["name"]
 							patient["patient_id"] = existing_id
-							patient["age"] = exist_pat["age"] if exist_pat else 42
+							patient["age"] = exist_pat["age"] if exist_pat else patient["age"]
 							patient["staff_notes"] = (patient["staff_notes"] or "") + f"\n[System] Merged record with {existing_id}."
 					for case in state["cases"]:
 						if case["name"] == new_name:
-							case["name"] = exist_pat["name"] if exist_pat else "Sunita Uran"
+							case["name"] = exist_pat["name"] if exist_pat else case["name"]
 							case["patient_id"] = existing_id
-							case["age"] = exist_pat["age"] if exist_pat else 42
+							case["age"] = exist_pat["age"] if exist_pat else case["age"]
 				elif choice == "Keep separate":
-					# Assign new ID to keep them separate
 					for patient in state["patients"]:
 						if patient["name"] == new_name:
 							patient["patient_id"] = f"P-{1000 + len(state['patients'])}"
@@ -124,4 +130,4 @@ def render(state: dict) -> None:
 				st.rerun()
 
 	st.subheader("Last successful sync by ASHA worker and village")
-	st.dataframe(pd.DataFrame(state["asha_workers"]), use_container_width=True, hide_index=True)
+	st.dataframe(pd.DataFrame(state["asha_workers"]), width="stretch", hide_index=True)

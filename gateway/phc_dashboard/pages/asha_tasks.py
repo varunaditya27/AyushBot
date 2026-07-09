@@ -2,11 +2,36 @@ import pandas as pd
 import streamlit as st
 
 from components.metrics import custom_metric
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 
 TASK_TYPES = ["repeat vitals", "household follow-up", "bring patient to PHC", "collect missing information", "referral confirmation"]
 STATUSES = ["Assigned", "Pending", "Completed", "Overdue"]
+
+
+def _format_due(due_date: date, due_time) -> str:
+	if due_date == date.today():
+		return f"Today {due_time.strftime('%H:%M')}"
+	return f"{due_date.strftime('%Y-%m-%d')} {due_time.strftime('%H:%M')}"
+
+
+def _parse_due(value: str) -> tuple[date, object]:
+	parts = value.split()
+	due_date = date.today()
+	due_time = datetime.strptime("17:00", "%H:%M").time()
+	if len(parts) >= 2:
+		if parts[0] == "Tomorrow":
+			due_date = date.today() + timedelta(days=1)
+		elif parts[0] != "Today":
+			try:
+				due_date = datetime.strptime(parts[0], "%Y-%m-%d").date()
+			except ValueError:
+				due_date = date.today()
+		try:
+			due_time = datetime.strptime(parts[1], "%H:%M").time()
+		except ValueError:
+			due_time = datetime.strptime("17:00", "%H:%M").time()
+	return due_date, due_time
 
 
 def render(state: dict) -> None:
@@ -23,7 +48,7 @@ def render(state: dict) -> None:
 		submitted = st.form_submit_button("Assign task")
 		if submitted:
 			worker = next(item for item in state["asha_workers"] if item["name"] == asha)
-			due_str = f"Today {due_time.strftime('%H:%M')}" if due_date == date.today() else f"{due_date.strftime('%Y-%m-%d')} {due_time.strftime('%H:%M')}"
+			due_str = _format_due(due_date, due_time)
 			state["tasks"].append(
 				{"task_id": f"T-{301 + len(state['tasks'])}", "asha": asha, "village": worker["village"], "task_type": task_type, "patient": patient, "due": due_str, "status": "Assigned"},
 			)
@@ -42,27 +67,43 @@ def render(state: dict) -> None:
 		custom_metric("Overdue", sum(1 for task in state["tasks"] if task["status"] == "Overdue"), "#bc2026")
 
 	st.subheader("Task Management Registry")
-	st.write("Edit status or due time inline in the table below to update the task status on the gateway.")
+	st.write("Review task details below, then use the update controls to change status or due time without shifting rows.")
 	
 	df = pd.DataFrame(state["tasks"]).sort_values(by="task_id", ascending=False)
-	edited_df = st.data_editor(
+	st.dataframe(
 		df,
 		column_config={
 			"task_id": st.column_config.TextColumn("Task ID", disabled=True),
 			"asha": st.column_config.TextColumn("ASHA Worker", disabled=True),
 			"village": st.column_config.TextColumn("Village", disabled=True),
-			"task_type": st.column_config.SelectboxColumn("Task Type", options=TASK_TYPES, required=True),
+			"task_type": st.column_config.TextColumn("Task Type", disabled=True),
 			"patient": st.column_config.TextColumn("Patient", disabled=True),
-			"due": st.column_config.TextColumn("Due Date/Time", required=True),
-			"status": st.column_config.SelectboxColumn("Status", options=STATUSES, required=True),
+			"due": st.column_config.TextColumn("Due Date/Time", disabled=True),
+			"status": st.column_config.TextColumn("Status", disabled=True),
 		},
-		use_container_width=True,
+		width="stretch",
 		hide_index=True,
-		key="tasks_editor"
 	)
-	
-	# Dynamically sync changes back to state["tasks"]
-	state["tasks"] = edited_df.to_dict("records")
+
+	if state["tasks"]:
+		task_by_id = {task["task_id"]: task for task in state["tasks"]}
+		selected_task_id = st.selectbox(
+			"Select task to update",
+			[task["task_id"] for task in sorted(state["tasks"], key=lambda item: item["task_id"], reverse=True)],
+			format_func=lambda task_id: f"{task_id} - {task_by_id[task_id]['patient']} ({task_by_id[task_id]['status']})",
+		)
+		selected_task = task_by_id[selected_task_id]
+		current_due_date, current_due_time = _parse_due(selected_task["due"])
+		with st.form("update-task"):
+			c1, c2, c3 = st.columns(3)
+			next_status = c1.selectbox("Status", STATUSES, index=STATUSES.index(selected_task["status"]))
+			next_due_date = c2.date_input("Due Date", value=current_due_date)
+			next_due_time = c3.time_input("Due Time", value=current_due_time)
+			if st.form_submit_button("Update selected task"):
+				selected_task["status"] = next_status
+				selected_task["due"] = _format_due(next_due_date, next_due_time)
+				st.success(f"{selected_task_id} updated locally.")
+				st.rerun()
 
 	st.subheader("ASHA Worker Directory & Sync Info")
 	asha_df = pd.DataFrame(state["asha_workers"])
@@ -74,6 +115,6 @@ def render(state: dict) -> None:
 			"availability": "Availability Status",
 			"last_sync": "Last Successful Sync",
 		},
-		use_container_width=True,
+		width="stretch",
 		hide_index=True
 	)

@@ -39,7 +39,7 @@ def override_triage_dialog(case: dict, state: dict) -> None:
 	st.write(f"Current risk level: **{case['risk']}**")
 	new_risk = st.selectbox("Select new risk level", ["Emergency", "High", "Moderate", "Low"])
 	justification = st.text_area("Clinician justification / rationale", placeholder="Explain the reason for overriding the AI triage level...")
-	if st.button("Submit Override", use_container_width=True):
+	if st.button("Submit Override", width="stretch"):
 		if not justification.strip():
 			st.error("Justification is required to override triage.")
 		else:
@@ -59,7 +59,7 @@ def override_triage_dialog(case: dict, state: dict) -> None:
 def request_details_dialog(case: dict, state: dict) -> None:
 	st.write(f"Request additional checks/details for **{case['name']}** from ASHA worker **{case['asha']}**.")
 	details_requested = st.text_area("What checks or missing info are needed?", placeholder="e.g. Please check chest tightness frequency or repeat temperature in 2 hours.")
-	if st.button("Assign Task to ASHA", use_container_width=True):
+	if st.button("Assign Task to ASHA", width="stretch"):
 		if not details_requested.strip():
 			st.error("Please enter details of the request.")
 		else:
@@ -90,7 +90,7 @@ def schedule_followup_dialog(case: dict, state: dict) -> None:
 	due_time = c2.time_input("Due Time", value=datetime.strptime("17:00", "%H:%M").time())
 	
 	notes = st.text_area("Instructions for ASHA", placeholder="Enter specific instructions for this follow-up...")
-	if st.button("Schedule Follow-up Task", use_container_width=True):
+	if st.button("Schedule Follow-up Task", width="stretch"):
 		due_str = f"Today {due_time.strftime('%H:%M')}" if due_date == date.today() else f"{due_date.strftime('%Y-%m-%d')} {due_time.strftime('%H:%M')}"
 		new_task_id = f"T-{301 + len(state['tasks'])}"
 		state["tasks"].append(
@@ -119,7 +119,7 @@ def refer_patient_dialog(case: dict, state: dict) -> None:
 	reason = st.text_input("Reason for Referral", placeholder="e.g. persistent dyspnea, suspected complication")
 	route = st.text_input("Suggested Route / Transport Details", placeholder="e.g. 12 km, ambulance advised")
 	contact_notes = st.text_area("Contact / Confirmation Notes", placeholder="e.g. Nurse expected at CHC, ambulance dispatched")
-	if st.button("Confirm Referral", use_container_width=True):
+	if st.button("Confirm Referral", width="stretch"):
 		if not facility.strip() or not reason.strip():
 			st.error("Facility and Reason are required.")
 		else:
@@ -149,7 +149,7 @@ def refer_patient_dialog(case: dict, state: dict) -> None:
 def close_case_dialog(case: dict, state: dict) -> None:
 	st.write(f"Are you sure you want to close the case for **{case['name']}**?")
 	note = st.text_area("Closure notes", placeholder="e.g. Vitals stabilized, patient discharged or referral complete.")
-	if st.button("Confirm Close Case", use_container_width=True):
+	if st.button("Confirm Close Case", width="stretch"):
 		if "Pending Review" in case["status"]:
 			case["status"].remove("Pending Review")
 		if "Closed" not in case["status"]:
@@ -213,7 +213,7 @@ def render(state: dict) -> None:
 		triage_approved = "Triage Approved" in case["status"]
 		
 		if not is_closed:
-			if st.button("Approve Triage", use_container_width=True, disabled=triage_approved):
+			if st.button("Approve Triage", width="stretch", disabled=triage_approved):
 				if "Pending Review" in case["status"]:
 					case["status"].remove("Pending Review")
 				if "Triage Approved" not in case["status"]:
@@ -221,19 +221,19 @@ def render(state: dict) -> None:
 				_record_action(state, case, "Triage Approved", f"Triage risk level of {case['risk']} approved by clinician.")
 				st.success("Triage level approved.")
 				st.rerun()
-			if st.button("Override Triage", use_container_width=True):
+			if st.button("Override Triage", width="stretch"):
 				override_triage_dialog(case, state)
-			if st.button("Request More Details", use_container_width=True):
+			if st.button("Request More Details", width="stretch"):
 				request_details_dialog(case, state)
-			if st.button("Schedule Follow-up", use_container_width=True):
+			if st.button("Schedule Follow-up", width="stretch"):
 				schedule_followup_dialog(case, state)
-			if st.button("Refer Patient", use_container_width=True):
+			if st.button("Refer Patient", width="stretch"):
 				refer_patient_dialog(case, state)
-			if st.button("Close Case", use_container_width=True):
+			if st.button("Close Case", width="stretch"):
 				close_case_dialog(case, state)
 		else:
 			st.warning("This case is closed. Action controls are disabled.")
-			if st.button("Reopen Case", use_container_width=True):
+			if st.button("Reopen Case", width="stretch"):
 				case["status"].remove("Closed")
 				if "Pending Review" not in case["status"]:
 					case["status"].append("Pending Review")

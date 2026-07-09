@@ -18,7 +18,7 @@ def render(state: dict) -> None:
 		if not needle or needle in " ".join([item["source"], item["section"], item["text"], " ".join(item["tags"])]).lower()
 	]
 	if rows:
-		st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+		st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 	else:
 		st.info("No local guideline chunk matches this search.")
 

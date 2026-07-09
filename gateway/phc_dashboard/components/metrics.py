@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import html
+
 import streamlit as st
 
 
 def custom_metric(label: str, value: str | int, border_color: str) -> None:
+	safe_label = html.escape(str(label))
+	safe_value = html.escape(str(value))
 	st.markdown(
 		f"""
 		<div class="metric-card" style="border-left: 4px solid {border_color} !important;">
-			<div style="color: #64748b; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; line-height: 1.2;">{label}</div>
-			<div style="color: #0f172a; font-size: 1.6rem; font-weight: 700; margin-top: 0.25rem;">{value}</div>
+			<div style="color: #64748b; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; line-height: 1.2;">{safe_label}</div>
+			<div style="color: #0f172a; font-size: 1.6rem; font-weight: 700; margin-top: 0.25rem; line-height: 1.2; white-space: normal; overflow-wrap: anywhere;">{safe_value}</div>
 		</div>
 		""",
 		unsafe_allow_html=True,

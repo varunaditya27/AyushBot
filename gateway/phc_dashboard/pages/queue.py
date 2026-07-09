@@ -55,7 +55,7 @@ def render(state: dict) -> None:
 		}
 		for case in filtered
 	]
-	st.dataframe(pd.DataFrame(table_rows), use_container_width=True, hide_index=True)
+	st.dataframe(pd.DataFrame(table_rows), width="stretch", hide_index=True)
 
 	selected = st.selectbox("Select case for review", [case["case_id"] for case in filtered], format_func=lambda cid: f"{cid} - {next(c['name'] for c in filtered if c['case_id'] == cid)}")
 	state["selected_case_id"] = selected

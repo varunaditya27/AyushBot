@@ -42,7 +42,7 @@ def render(state: dict) -> None:
 		)
 	
 	st.write("**Matching Patient Records:**")
-	st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+	st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
 	st.markdown("---")
 	st.subheader("Patient Clinical File View")
