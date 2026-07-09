@@ -78,6 +78,16 @@ cd android
 
 For advanced deployment instructions, refer to [`/infra`](infra/README.md).
 
+## 🏥 PHC Gateway Web Dashboard
+
+The local PHC operations dashboard is available as a separate Streamlit app:
+
+```bash
+streamlit run gateway/phc_dashboard/app.py
+```
+
+It is separate from the cloud analytics dashboards and focuses on PHC staff workflows: ASHA case queue review, referrals, ASHA follow-up tasks, local sync/conflict handling, EdgeRAG guideline evidence, and daily PHC reporting. Mock local data is embedded so it can run on a Raspberry Pi gateway without network access or backend services. See [`gateway/phc_dashboard/README.md`](gateway/phc_dashboard/README.md).
+
 ## 🎨 Frontend Design Authority
 
 The Android frontend is implemented against these canonical documents:
