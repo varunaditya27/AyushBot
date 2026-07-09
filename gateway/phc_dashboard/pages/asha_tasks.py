@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 
+from components import charts
 from components.metrics import custom_metric
 from datetime import date, datetime, timedelta
 
@@ -65,6 +66,16 @@ def render(state: dict) -> None:
 		custom_metric("Completed", sum(1 for task in state["tasks"] if task["status"] == "Completed"), "#16754f")
 	with c4:
 		custom_metric("Overdue", sum(1 for task in state["tasks"] if task["status"] == "Overdue"), "#bc2026")
+
+	chart_left, chart_right = st.columns([0.9, 1.1])
+	with chart_left:
+		with st.container(border=True):
+			st.markdown("**Task Status Mix**")
+			st.plotly_chart(charts.task_status(state["tasks"]), width="stretch", config={"displayModeBar": False})
+	with chart_right:
+		with st.container(border=True):
+			st.markdown("**ASHA Workload**")
+			st.plotly_chart(charts.asha_workload(state["tasks"]), width="stretch", config={"displayModeBar": False})
 
 	st.subheader("Task Management Registry")
 	st.write("Review task details below, then use the update controls to change status or due time without shifting rows.")

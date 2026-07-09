@@ -4,6 +4,7 @@ from io import StringIO
 
 import streamlit as st
 
+from components import charts
 from components.metrics import custom_metric
 
 
@@ -75,6 +76,16 @@ def render(state: dict) -> None:
 
 	with st.expander("Print/export preview", expanded=False):
 		st.code(report, language="text")
+
+	chart_left, chart_right = st.columns([1, 1])
+	with chart_left:
+		with st.container(border=True):
+			st.markdown("**Follow-up Task Status**")
+			st.plotly_chart(charts.task_status(state["tasks"]), width="stretch", config={"displayModeBar": False})
+	with chart_right:
+		with st.container(border=True):
+			st.markdown("**Case Sync Status**")
+			st.plotly_chart(charts.sync_status(state["cases"]), width="stretch", config={"displayModeBar": False})
 
 	st.markdown(
 		f"""

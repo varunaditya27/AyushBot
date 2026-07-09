@@ -5,6 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from components import charts
 from components.metrics import queue_metrics
 from components.status_chips import chips
 from data.mock_data import RISK_ORDER
@@ -18,6 +19,16 @@ def render(state: dict) -> None:
 	cases = state["cases"]
 	st.caption("Today’s ASHA-submitted cases, sorted by emergency and high-risk cases first.")
 	queue_metrics(cases, state["referrals"], state["tasks"])
+
+	chart_left, chart_right = st.columns([1, 1.25])
+	with chart_left:
+		with st.container(border=True):
+			st.markdown("**Risk Distribution**")
+			st.plotly_chart(charts.risk_distribution(cases), width="stretch", config={"displayModeBar": False})
+	with chart_right:
+		with st.container(border=True):
+			st.markdown("**Village Workload by Risk**")
+			st.plotly_chart(charts.village_load(cases), width="stretch", config={"displayModeBar": False})
 
 	st.sidebar.markdown("### Queue filters")
 	village = st.sidebar.selectbox("Village", _options(cases, "village"))
