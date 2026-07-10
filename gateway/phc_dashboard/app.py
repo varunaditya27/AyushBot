@@ -5,28 +5,22 @@ from __future__ import annotations
 import streamlit as st
 
 from data.mock_data import fresh_state
-from pages import asha_tasks, case_review, daily_report, guidelines, local_sync, patients, queue, referrals
+from pages import asha_tasks, case_review, daily_report, queue, referrals
 
 
 PAGES = {
 	"Live Queue": queue.render,
 	"Case Review": case_review.render,
-	"Patient Registry": patients.render,
 	"Referrals": referrals.render,
 	"ASHA Tasks": asha_tasks.render,
-	"Local Sync": local_sync.render,
-	"Guidelines": guidelines.render,
 	"Daily Report": daily_report.render,
 }
 
 PAGE_SUBTITLES = {
 	"Live Queue": "ASHA-submitted cases, clinical risk, vitals, and sync status for today.",
 	"Case Review": "Clinician action workspace for triage decisions, evidence, and audit trail.",
-	"Patient Registry": "Searchable local records, clinical flags, visits, and staff notes.",
 	"Referrals": "Track higher-facility referrals from creation through completion.",
 	"ASHA Tasks": "Coordinate follow-ups, field checks, and local task sync.",
-	"Local Sync": "Monitor offline backlog, failed syncs, and duplicate patient conflicts.",
-	"Guidelines": "Inspect local EdgeRAG guideline chunks used for recommendations.",
 	"Daily Report": "End-of-day PHC operations summary for export and handover.",
 }
 

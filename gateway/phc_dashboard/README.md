@@ -19,11 +19,8 @@ The dashboard is offline-first and uses embedded mock data for ASHA cases, patie
 
 Included pages:
 
-- Queue
+- Live Queue
 - Case Review
-- Patients
 - Referrals
 - ASHA Tasks
-- Local Sync
-- Guidelines
 - Daily Report
